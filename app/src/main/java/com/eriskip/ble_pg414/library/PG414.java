@@ -1,0 +1,237 @@
+package com.eriskip.ble_pg414.library;
+
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.os.AsyncTask;
+
+import java.io.UnsupportedEncodingException;
+
+public class PG414 {
+
+        //Перечисления параметров
+        public enum BaudRate {b1200, b2400, b4800, b9600, b19200, b38400, b57600, b115200}
+        public enum Parity   {none, even, odd}
+        public enum StopBit  {b1,b2}
+
+        /*Указатели на внешние классы*/
+        public BluetoothGatt mBluetoothGatt;
+        public BluetoothGattCharacteristic mCharacteristic;
+
+
+        /*Версия прошивки*/
+        public String hard_version;
+
+        /*Сетевые параметры*/
+        public byte mbAdr;          //Сетевой адрес
+
+        /*Параметры*/
+        public short[] limit1       = new short[4];        //порог 1
+        public short[] limit2       = new short[4];        //порог 2
+        public short[] hist1        = new short[4];        //гистерезис 1
+        public short[] hist2        = new short[4];        //гистерезис 2
+        public short[] abort_time   = new short[4];        //время сброса
+        public short[] death_zone   = new short[4];        //мертвая зона
+
+        /*Единицы измерения*/
+        public byte main_unit;          //Основаная единица измерения     //0 - ед. измерения сенсора. 1 - мг/м3
+        public byte mode_unit;          //Режим отображения единиц        //0 - одинарный редим отображения. 1 - двойной режим отображения
+
+        /*Динамические данные*/
+        public byte[]  state = new byte[8];       //Состояние устройства
+        public int conc1;                         //Текущая концентрация с сенсора 1
+        public int conc2;                         //Текущая концентрация с сенсора 2
+        public int conc3;                         //Текущая концентрация с сенсора 3
+        public int conc4;                         //Текущая концентрация с сенсора 4
+
+        public long zavod_number;       //заводской номер
+
+        public String[]     gazUnit = new String[4];    //единицы измерения
+        public String[]     gazType = new String[4];    //тип газа
+        public byte[]       gazDiskret = new byte[4];   //дискертность единиц измерения газа
+        public short[]      gazDelitel;                 //делитель концентрации газа
+
+        public String descriptor;
+        public String login;
+        public String password;
+        public String gps;
+        public String status;
+
+        //Конструктор
+        public PG414(BluetoothGatt mBGT,  BluetoothGattCharacteristic Character)
+        {
+            mBluetoothGatt = mBGT;                                                                  //получаем BLE GATT
+            mCharacteristic = Character;                                                            //и характеристику
+            zavod_number = 0;
+            gazDelitel = new short[] {1,10,100};
+        }
+
+        public String[] array_of_Errors =
+                {
+                        "Критический заряд",
+                        "Низкий заряд",
+                        "Превышение диапазона",
+                        "Превышение диапазона",
+                        "Превышение диапазона",
+                        "Превышение диапазона",
+                        "Порог 1 - Электрохим. 1",
+                        "Порог 1 - Электрохим. 2",
+                        "Порог 1 - Кислород",
+                        "Порог 1 - Пеллистор/мипекс",
+                        "Порог 2 - Электрохим. 1",
+                        "Порог 2 - Электрохим. 1",
+                        "Порог 2 - Кислород",
+                        "Порог 2 - Пеллистор/мипекс",
+                        "Время не установлено",
+                        "НЕ ИСПОЛЬЗУЕТСЯ",
+                        "Датчик темп. неисправен",
+                        "Датчик давления неисправен",
+                        "Битая конфиг. таблица сенсора",
+                        "Битая конфиг. таблица сенсора",
+                        "Битая конфиг. таблица сенсора",
+                        "Битая конфиг. таблица сенсора",
+                        "I2C не работает",
+                        "I2C не работает",
+                        "Ошибка АЦП элх. сенсора",
+                        "Ошибка АЦП элх. сенсора",
+                        "Ошибка АЦП элх. сенсора",
+                        "Ошибка АЦП элх. сенсора",
+                        "Ошибка АЦП элх. сенсора",
+                        "Ошибка конфигурации LMP",
+                        "Ошибка конфигурации LMP",
+                        "НЕ ИСПОЛЬЗУЕТСЯ",
+                        "НЕ ИСПОЛЬЗУЕТСЯ",
+                        "Ошибка неисправности И2Ц",
+                        "Ошибка неисправности И2Ц",
+                        "Ошибка неисправности И2Ц",
+                        "Ошибка неисправности И2Ц",
+                        "Ошибка неисправности И2Ц",
+                        "Ошибка неисправности И2Ц",
+                        "Ошибка неисправности И2Ц",
+                        "Ошибка при чтении из флеша",
+                        "Ошибка при чтении параметров из флеша",
+                        "Ошибка при считывании лога",
+                        "Ошибка модуля BLE"
+                };
+
+        /**********ФУНКЦИИ**********/
+        //Запрос на чтение динмических параметров
+        public void reqDyn()
+        {
+            byte[] request = new  byte[10];
+            //формируем запрос
+            request[0] =(byte) 21;             //первым байтом указываем длинну ответа 16 структура 5 обертка комнады
+            request[1] =(byte) 0xFE;
+            request[2] =(byte) 'D';              //Команда
+            request[3] =(byte) 'P';
+            request[4] =(byte) '#';              //-------
+            request[5] =(byte) 0x0D;
+            mCharacteristic.setValue(request);                          //заносим в характеристику
+            mBluetoothGatt.writeCharacteristic(mCharacteristic);
+        }
+
+        //Парсим прочитанные динамические параметры
+        public void parseDyn(byte[] answer)
+        {
+            conc1 = ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF);
+            conc2 = ((answer[7]  & 0xFF) << 8) + (answer[6]  & 0xFF);
+            conc3 = ((answer[9] & 0xFF) << 8) +  (answer[8] & 0xFF);
+            conc4 = ((answer[11] & 0xFF) << 8) +  (answer[10] & 0xFF);
+            for(byte x = 0; x < 8; x++)
+            {
+                state[x] = answer[11 + x];
+            }
+        }
+
+        //Запрос на чтение параметров
+        public void reqParam(byte Number)
+        {
+            byte[] request = new  byte[10];
+            //формируем запрос
+            request[0] =(byte) 45;               //первым байтом указываем длинну ответа 40 структура 5 обертка комнады
+            request[1] =(byte) 0xFE;
+            request[2] =(byte) 'R';              //Команда
+            request[3] =(byte) ('0' + Number);
+            request[4] =(byte) '#';              //-------
+            request[5] =(byte) 0x0D;
+            mCharacteristic.setValue(request);                          //заносим в характеристику
+            mBluetoothGatt.writeCharacteristic(mCharacteristic);
+        }
+
+        public void parseParam(byte[] answer, byte num_struct) throws UnsupportedEncodingException {
+            byte i;
+            byte gaz[] = new byte [7]; byte unit[] = new byte [7];
+            switch (num_struct)
+            {
+                case 1:
+                            i = 8;
+                            zavod_number = (((answer[7]  & 0xFF) << 24) + ((answer[6]  & 0xFF) << 16) + ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF)) & 0xFFFFFFFFl;
+                            for (byte x = 0; x < 4; x++) gazDiskret[x] = answer[i++];
+                            for (byte x = 0; x < 2; x++)
+                            {
+                                for (byte y = 0; y < 7; y++) {
+                                    gaz[y] = answer[i++];
+                                }
+                                for (byte z = 0; z < 7; z++) {
+                                    unit[z] = answer[i++];
+                                }
+
+                                gazType[x] = new String(gaz, "Windows-1251");
+                                gazUnit[x] = new String(unit, "Windows-1251");
+                            }
+                    break;
+
+                case 2:
+                    i = 4;
+                    for (byte x = 2; x < 4; x++)
+                    {
+                        for (byte y = 0; y < 7; y++) {
+                            gaz[y] = answer[i++];
+                        }
+                        for (byte z = 0; z < 7; z++) {
+                            unit[z] = answer[i++];
+                        }
+
+                        gazType[x] = new String(gaz, "Windows-1251");
+                        gazUnit[x] = new String(unit, "Windows-1251");
+                    }
+                    break;
+            }
+        }
+
+        //Переводим текущий статус в текстовый описатель ошибок
+        public String Make_State()
+        {
+            String result = "";
+            byte indx_err = 0;
+            for (byte x = 0; x < 8; x++)
+            {
+                for (byte y = 0; y < 8; y++)
+                {
+                    if (((state[x] >> y) & 0x01) != 0) result += array_of_Errors[indx_err]+"\n";
+                    indx_err++;
+                }
+            }
+            status = result;
+            return result;
+        }
+
+        //Чистим текст от постороних символов
+        public void clean_text()
+        {
+            for (byte y = 0; y < 4; y++)
+            {
+                gazType[y] = gazType[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
+                gazUnit[y] = gazUnit[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
+            }
+
+        }
+
+
+    //Чтение характеристики
+        public void startRead()
+        {
+            mBluetoothGatt.readCharacteristic(mCharacteristic);
+        }
+}
+
+
