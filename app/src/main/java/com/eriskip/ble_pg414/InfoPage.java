@@ -14,6 +14,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
@@ -38,21 +39,33 @@ public class InfoPage extends AppCompatActivity {
 
     Sendind Send_Message = Sendind.eReg_info;                                               //переменная, которая отвечает за то какой сейчас пакет отправляется на сервер
 
-
-    TextView tconc1, tconc2, tconc3, tconc4, tzavod, gaz1, gaz2, gaz3, gaz4, tgps, tstatus, errcon; //текстовые поля
+    //>>>>>  UI ------------------------------------------------------------------------------------
+    TextView tconc1, tconc2, tconc3, tconc4, tzavod, gaz1, gaz2, gaz3, gaz4, tgps, tstatus,
+             charge, errcon;                                                                             //текстовые поля
+    ImageView disconnect;
+    //----------------------------------------------------------------------------------------------
 
     public static TaskDynRead readDynParam;         //поток чтения параметров
+    public   MyTask_reg send_asynk;                 //поток отправки сообщений
+
     LocationManager manager;                        //мэнеджер локаций для работы с GPS и NetService
 
-    boolean connect_server = false;                 //соединение с сервером
-    boolean has_be_register = false;
-    public   MyTask_reg send_asynk;
+    boolean connect_server =  false;                //соединение с сервером
+    boolean user_register =   true;                 //подошел ли пароль
+    boolean has_be_register = false;                //было ли зарегистрированно устройство
+
+
+    public int connToDev = 0;                      // попытки подключения
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_info_page);
-        Connect.myPG.clean_text();
+        if (!Connect.offline)
+        Connect.myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
+
+        //Ассоциаируем UI объекты
         tconc1 = findViewById(R.id.tconc1);
         tconc2 = findViewById(R.id.tconc2);
         tconc3 = findViewById(R.id.tconc3);
@@ -67,11 +80,15 @@ public class InfoPage extends AppCompatActivity {
         gaz4 = findViewById(R.id.gaz4);
 
         errcon = findViewById(R.id.err_con);
+        charge = findViewById(R.id.percent);
 
+        disconnect = findViewById(R.id.disconnect);
 
-        /***********************TEMP***********************************/
-        Connect.myPG.password = "test";  Connect.myPG.login = "test";
-        Connect.myPG.descriptor = "ПГ-414. Отдел разработок";
+        /************************Получаем параметры, введенные пользователем**********************/
+        Connect.myPG.password    = MainActivity.Password;
+        Connect.myPG.login       = MainActivity.Login;
+        Connect.myPG.descriptor  = MainActivity.Description;
+        /*---------------------------------------------------------------------------------------*/
 
         //Отправка на сервер
         send_message_to_server(Sendind.eReg_info);
@@ -82,17 +99,15 @@ public class InfoPage extends AppCompatActivity {
         manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            tgps.setText("GPS отключен");
+            tgps.setText("Запрет на геолокацию");
             return;
         }
 
         //Выводим описатели газа
-        gaz1.setText(Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]);
-        gaz2.setText(Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);
-        gaz3.setText(Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);
-        gaz4.setText(Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]);
-
-
+        gaz1.setText("-");//Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]);
+        gaz2.setText("-");//Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);
+        gaz3.setText("O2, %об.д.");//Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);
+        gaz4.setText("CH4, %об.д.");//Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]);
 
         //Статус
         tstatus = findViewById(R.id.tstate);
@@ -128,7 +143,9 @@ public class InfoPage extends AppCompatActivity {
 
     //Обработчик кнопки Подробнее
     public void NullOut(View view){
-
+        int a = 0;
+        a = Connect.myPG.percent_charge;
+        a = 10;
     }
 
     /* Поток чтения динамических параметров */
@@ -143,6 +160,7 @@ public class InfoPage extends AppCompatActivity {
                     sending_reg_info();
                     //Если не пришла команда паузы чтения
                     if (!Connect.read_pause) {
+                        connToDev = 0;
                         //Чтение статуса
                         Connect.myPG.reqDyn();
                         Connect.State_pack = Connect.RX_pack.DYNPARAM;
@@ -160,7 +178,6 @@ public class InfoPage extends AppCompatActivity {
         }
     }
 
-        public  Timer timer_server_sender;
         public byte cnt_sec = 0;
 
         ///Таймер для обновления графического интерфейса в зависимости от показаний
@@ -191,11 +208,25 @@ public class InfoPage extends AppCompatActivity {
                                 tconc3.setText(nf[2].format(Connect.myPG.conc3/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[2]*(-1)])));
                                 tconc4.setText(nf[3].format(Connect.myPG.conc4/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[3]*(-1)])));
 
+                                charge.setText("Заряд батареи: " + Connect.myPG.percent_charge + "%");
+
                                 tstatus.setText(Connect.myPG.Make_State());
-                                if (!connect_server)
+                                if (!user_register && connect_server)
+                                {
+                                    errcon.setText("Неверный логин или пароль");
                                     errcon.setVisibility(View.VISIBLE);
+                                }
                                 else
+                                if (!connect_server) {
+                                    errcon.setText("Нет соединения с сервером. Ошибка связи");
+                                    errcon.setVisibility(View.VISIBLE);
+                                    disconnect.setVisibility(View.VISIBLE);
+                                }
+                                else {
                                     errcon.setVisibility(View.INVISIBLE);
+                                    disconnect.setVisibility(View.INVISIBLE);
+                                }
+
 
                                 if (cnt_sec == 4) {
                                     cnt_sec = 0;
@@ -205,6 +236,13 @@ public class InfoPage extends AppCompatActivity {
                                         send_message_to_server(Sendind.eEvent);        //Шлем данные о событиях
                                 }
                                 cnt_sec++;
+
+                                connToDev++;
+                                if (connToDev > 4)
+                                {
+                                    tstatus.setText("Потеряна связь с устройством");
+                                    Connect.myPG.mBluetoothGatt.connect();
+                                }
                             }
                         }
                     });
@@ -251,19 +289,25 @@ public class InfoPage extends AppCompatActivity {
         }
          public byte[] sending_reg_info()
          {
+             int p = 0;
              if (Send_Message != Sendind.eNone) {
                  String params = "";
                  if (Send_Message == Sendind.eReg_info) {
                      params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&description=" + Connect.myPG.descriptor + "&key=1562";
                  } else if (Send_Message == Sendind.eEvent) {
+                     if (Connect.myPG.status.length() == 21)  Connect.myPG.status = "OK";
                     //Если статус пустой то шлем OK;
-                     if (Connect.myPG.status.length() < 5) Connect.myPG.status = "OK";
+                     if (Connect.myPG.status.length() < 5) {
+                         Connect.myPG.status = "OK";
+                     }
+
                      params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
                              + "&gps=" + Connect.myPG.gps + "&state=" + Connect.myPG.status
-                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+ gaz1.getText().toString()
-                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+ gaz2.getText().toString()
-                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+ gaz3.getText().toString()
-                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ gaz4.getText().toString()
+                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+ "-"
+                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+ "-"                               //gaz2.getText().toString()
+                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+ "O2, %об.д"
+                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ "CH4, %об.д"                            //gaz4.getText().toString()
+                             + "&field1="+ Connect.myPG.percent_charge                                                    //заряд
                              + "&key=1562";
                  } else return null;
                  byte[] dataz = null;
@@ -314,6 +358,10 @@ public class InfoPage extends AppCompatActivity {
                      }
                  }
                  Send_Message = Sendind.eNone;
+                 if (connect_server && dataz[1] == 'n' && dataz[2] == 'o')
+                     user_register = false;
+                 else
+                     user_register = true;
                  return dataz;
              }
              return null;

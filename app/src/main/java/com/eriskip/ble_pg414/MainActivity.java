@@ -12,6 +12,7 @@ import android.view.View;
 import android.widget.EditText;
 import android.content.SharedPreferences;
 import android.content.Context;
+import android.widget.TextView;
 
 import 	java.io.InputStream;
 import 	java.net.HttpURLConnection;
@@ -28,14 +29,17 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "Connection PG414";
 
 
-    //****  Настройки
+    //>>>>> Настройки     -------------------------------------------------------------------
     private SharedPreferences mSettings;
-    public String FILE_SETTINGS      =  "configs";
-    public String LOGIN_SETTINGS       =  "login";   public String  Login    = "";
-    public String PASSWORD_SETTINGS =  "password";   public String  Password = "";
-    public String ADRES_SETTINGS =        "adres";   public String  Adress   = "";
-    public String WC_SETTINGS =        "bconnect";   public boolean bConnect;
+    public String FILE_SETTINGS        =  "configs";
+    public String LOGIN_SETTINGS       =    "login";   public static String  Login       = "";
+    public String PASSWORD_SETTINGS     ="password";   public static String  Password    = "";
+    public String ADRES_SETTINGS     =      "adres";   public static String  Adress      = "";
+    public String WC_SETTINGS   =        "bconnect";   public static boolean bConnect;
+    public String DESCRIPT_SETTINGS  =       "desc";   public static String  Description = "";
+    //---------------------------------------------------------------------------------------
 
+    EditText eLogin, ePassword, eDescript;
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -50,13 +54,23 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         mSettings = getSharedPreferences(FILE_SETTINGS, Context.MODE_PRIVATE);
         setContentView(R.layout.activity_main);
+        //Ассоциируем графические объекты
+        eLogin    = findViewById(R.id.eLogin);
+        ePassword = findViewById(R.id.ePassword);
+        eDescript = findViewById(R.id.eDescript);
+        eLogin.setText(Login);
+        ePassword.setText(Password);
+        eDescript.setText(Description);
 
-//TMP   //Временная строка для того чтобы переключиться на сразу форму подключения
-        Intent intent = new Intent(this, Connect.class);
-        startActivityForResult(intent, CHOOSE_THIEF);
+////TMP   //Временная строка для того чтобы переключиться на сразу форму подключения
+//        Intent intent = new Intent(this, Connect.class);
+//        startActivityForResult(intent, CHOOSE_THIEF);
     }
 
     public void ConnectOpen(View view){
+        Login = eLogin.getText().toString();
+        Password = ePassword.getText().toString();
+        Description = "ПГ-414." +  eDescript.getText().toString();
         Intent intent = new Intent(this, Connect.class);
         startActivityForResult(intent, CHOOSE_THIEF);
     }
@@ -85,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
             Adress = mSettings.getString(ADRES_SETTINGS,"nop");
             // Получаем флаг подключения к модулю
             bConnect = mSettings.getBoolean(WC_SETTINGS,false);
+            // Получаем текстовый описатель
     }
 }
 

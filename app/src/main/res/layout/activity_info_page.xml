@@ -23,7 +23,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="8dp"
         android:text="Координаты:"
         android:textSize="14sp"
         android:textStyle="italic"
@@ -59,14 +59,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
         android:text="Состояние:"
         android:textColor="@color/colorPrimaryDark"
         android:textSize="18sp"
         android:textStyle="bold"
         app:layout_constraintBottom_toTopOf="@+id/tstate"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tgps" />
+        app:layout_constraintTop_toBottomOf="@+id/percent" />
 
     <TextView
         android:id="@+id/tzavod"
@@ -84,7 +83,7 @@
         android:layout_width="129dp"
         android:layout_height="205dp"
         android:layout_marginStart="16dp"
-        android:text="Низкий заряд батареи Превышение диапазона Датчик температуры не считывается BMP280 не считывается Битая конфигурационная таблица сенсора I2C не работает Калибровка 0  "
+        android:text="-"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView4" />
 
@@ -153,10 +152,12 @@
     <TextView
         android:id="@+id/tgps"
         android:layout_width="128dp"
-        android:layout_height="47dp"
+        android:layout_height="34dp"
+        android:layout_marginBottom="3dp"
         android:layout_marginStart="16dp"
         android:text="56.760000, 54.160000"
         android:textColor="@color/colorPrimary"
+        app:layout_constraintBottom_toTopOf="@+id/percent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView7" />
 
@@ -211,5 +212,27 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageView
+        android:id="@+id/disconnect"
+        android:layout_width="170dp"
+        android:layout_height="204dp"
+        android:layout_marginStart="8dp"
+        android:visibility="invisible"
+        app:layout_constraintBottom_toBottomOf="@+id/tstate"
+        app:layout_constraintStart_toStartOf="parent"
+        app:srcCompat="@drawable/disconnect" />
+
+    <TextView
+        android:id="@+id/percent"
+        android:layout_width="130dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:text="Заряд батареи: 0%"
+        app:layout_constraintBottom_toTopOf="@+id/textView4"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tgps" />
 
 </android.support.constraint.ConstraintLayout>
