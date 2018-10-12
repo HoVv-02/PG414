@@ -104,10 +104,10 @@ public class InfoPage extends AppCompatActivity {
         }
 
         //Выводим описатели газа
-        gaz1.setText("H2S, ppm");//Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]);
-        gaz2.setText("-");//Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);
-        gaz3.setText("O2, %об.д.");//Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);
-        gaz4.setText("CH4, %об.д.");//Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]);
+        gaz1.setText(R.string.h2s);//Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]);
+        gaz2.setText(R.string.co);//Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);
+        gaz3.setText(R.string.o2);//Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);
+        gaz4.setText(R.string.ch4);//Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]);
 
         //Статус
         tstatus = findViewById(R.id.tstate);
@@ -143,9 +143,6 @@ public class InfoPage extends AppCompatActivity {
 
     //Обработчик кнопки Подробнее
     public void NullOut(View view){
-        int a = 0;
-        a = Connect.myPG.percent_charge;
-        a = 10;
     }
 
     /* Поток чтения динамических параметров */
@@ -208,19 +205,19 @@ public class InfoPage extends AppCompatActivity {
                                 tconc3.setText(nf[2].format(Connect.myPG.conc3/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[2]*(-1)])));
                                 tconc4.setText(nf[3].format(Connect.myPG.conc4/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[3]*(-1)])));
 
-                                charge.setText("Заряд батареи: " + Connect.myPG.percent_charge + "%");
+                                charge.setText(getResources().getString(R.string.Charge) + Connect.myPG.percent_charge + "%");
 
                                 tstatus.setText(Connect.myPG.Make_State());
                                 if (!user_register && connect_server)
                                 {
-                                    errcon.setText("Неверный логин или пароль");
+                                    errcon.setText(R.string.un_logi);
                                     errcon.setVisibility(View.VISIBLE);
                                 }
                                 else
                                 if (!connect_server) {
-                                    errcon.setText("Нет соединения с сервером. Ошибка связи");
-                                   // errcon.setVisibility(View.VISIBLE);
-                                   // disconnect.setVisibility(View.VISIBLE);
+                                    errcon.setText(R.string.Server_aerror);
+                                    errcon.setVisibility(View.VISIBLE);
+                                    disconnect.setVisibility(View.VISIBLE);
                                 }
                                 else {
                                     errcon.setVisibility(View.INVISIBLE);
@@ -240,7 +237,7 @@ public class InfoPage extends AppCompatActivity {
                                 connToDev++;
                                 if (connToDev > 4)
                                 {
-                                    tstatus.setText("Потеряна связь с устройством");
+                                    tstatus.setText(R.string.err_con_dev);
 
                                     Connect.myPG.mBluetoothGatt.connect();
                                     //tstatus.setText("Потеряна связь с устройством" + Connect.myPG.mBluetoothGatt.);
@@ -305,11 +302,11 @@ public class InfoPage extends AppCompatActivity {
 
                      params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
                              + "&gps=" + Connect.myPG.gps + "&state=" + Connect.myPG.status
-                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+"H2S, ppm"//gaz1.getText().toString()
-                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+"-"//gaz2.getText().toString()
-                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+"O2, %об.д."//gaz3.getText().toString()
-                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+"CH4, %Об.д."//gaz4.getText().toString()
-                             + "&field1="+ Connect.myPG.percent_charge                                                    //заряд
+                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+(R.string.h2s)          //gaz1.getText().toString()
+                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+(R.string.co)          //gaz2.getText().toString()
+                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+(R.string.o2)          //gaz3.getText().toString()
+                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+(R.string.ch4)          //gaz4.getText().toString()
+                             + "&field1="+ Connect.myPG.percent_charge                                                            //заряд
                              + "&key=1562";
                  } else return null;
                  byte[] dataz = null;

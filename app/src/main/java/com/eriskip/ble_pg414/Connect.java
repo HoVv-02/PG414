@@ -167,7 +167,7 @@ public class Connect extends AppCompatActivity {
             }
             btScanner = btAdapter.getBluetoothLeScanner();
         }
-        catch (Exception ex) {peripheralTextView.setText("Ошибка адаптера");}
+        catch (Exception ex) {peripheralTextView.setText(R.string.err_adapter);}
 
 
 
@@ -180,7 +180,7 @@ public class Connect extends AppCompatActivity {
         @Override
         public void onScanResult(int callbackType, ScanResult result)
         {
-            currentDevice = "Прибор: " + result.getDevice().getName();                         //текущее устройство
+            currentDevice =getResources().getString(R.string.Device)+ result.getDevice().getName();                         //текущее устройство
             if (!DeviceList.contains(currentDevice)) {                                         //если тек. устройства нет в списке
                 DeviceList.add(currentDevice);                                                 //добавляем его
                 BLElist.add(result.getDevice());                                               //пишем в список наших устройств
@@ -201,7 +201,7 @@ public class Connect extends AppCompatActivity {
         BLElist.clear();                                                                            //чистим устройства
         DeviceList.clear();                                                                         //чистим имена устройств
         currentDevice = "";
-        peripheralTextView.setText("Сканирование началось...");
+        peripheralTextView.setText(R.string.start_scan);
         startScanningButton.setVisibility(View.INVISIBLE);
         stopScanningButton.setVisibility(View.VISIBLE);
         AsyncTask ScanTask = null;
@@ -211,7 +211,7 @@ public class Connect extends AppCompatActivity {
                 try {
                     btScanner.startScan(leScanCallback);                                                //запускаем сканирование
                 }
-                catch (Exception ex) {peripheralTextView.setText("Ошибка сканирования");}
+                catch (Exception ex) {peripheralTextView.setText(R.string.scan_error);}
                 return null;
             }
         };
@@ -222,7 +222,7 @@ public class Connect extends AppCompatActivity {
 
 
     public void stopScanning() {
-        peripheralTextView.setText("Сканирование остановлено");
+        peripheralTextView.setText(R.string.Scan_stopped);
         startScanningButton.setVisibility(View.VISIBLE);
         stopScanningButton.setVisibility(View.INVISIBLE);
         //Останавливаем скан
@@ -253,8 +253,8 @@ public class Connect extends AppCompatActivity {
         readParam.execute();
         pgBar.setVisibility(View.VISIBLE);
         stateText.setVisibility(View.VISIBLE);
-        stateText.setText("Чтение параметров");
-        peripheralTextView.setText("Подключение...");
+        stateText.setText(R.string.params_reading);
+        peripheralTextView.setText(R.string.connect);
         startScanningButton.setVisibility(View.INVISIBLE);
     }
 
@@ -419,15 +419,15 @@ public class Connect extends AppCompatActivity {
                 /*Чтение динамических параметров*/
                 case DYNPARAM:
                          myPG.parseDyn(rec_value);               //парсинг динамических параметров
-                         State_of_connection = "Динамические параметры считаны";
+                         State_of_connection = getResources().getString(R.string.dyn_read_complete);
                     break;
                 /*  Чтение структуры параметров */
                 case READPARAM:
                         myPG.parseParam(rec_value, numParams);  //парсим структуру под номером numParams
-                        State_of_connection = "Параметры успешно считаны";
+                        State_of_connection = getResources().getString(R.string.read_params_compl);
                     break;
 
-                default: peripheralTextView.setText("Неизвестный пакет");
+                default: peripheralTextView.setText(R.string.un_package);
             }
             State_pack = RX_pack.COMPLETE;
 
@@ -468,6 +468,7 @@ public class Connect extends AppCompatActivity {
         offline = true;
         breaker = true;
         myPG = new PG414(mBluetoothGatt, mCharacteristic);
+        myPG.set_locale(getResources().getConfiguration().locale.toString());
         Intent intent = new Intent(this, InfoPage.class);
         startActivity(intent);
     }
@@ -486,7 +487,7 @@ public class Connect extends AppCompatActivity {
         @Override
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
-            peripheralTextView.setText("Информация считана");
+            peripheralTextView.setText(R.string.info_read);
             pgBar.setVisibility(View.INVISIBLE);
             stateText.setVisibility(View.INVISIBLE);
             offline = false;
@@ -502,7 +503,7 @@ public class Connect extends AppCompatActivity {
             if (be_connect == false) {
                 pgBar.setVisibility(View.INVISIBLE);
                 stateText.setVisibility(View.INVISIBLE);
-                peripheralTextView.setText("Ошибка подключения");
+                peripheralTextView.setText(R.string.err_conncet);
             }
         }
 
@@ -535,12 +536,12 @@ public class Connect extends AppCompatActivity {
                 Log.d(TAG, "BLEList ITEMS:" + BLEList.size());
                 if (BLEList.size() == 0)
                 {
-                    State_of_connection = "Ошибка подключения. Повторите попытку";
+                    State_of_connection = getResources().getString(R.string.repeat_error);
                     be_connect = false;
                     publishProgress();
                     this.cancel(false);
                 }
-                else    State_of_connection = "Считывание параметров";
+                else    State_of_connection = getResources().getString(R.string.params_reading);
                 try {
                     if (BLEList!= null) {
                         Log.d(TAG, "BLEList 3 pos caption:" + BLEList.get(3).getUuid());
@@ -553,12 +554,12 @@ public class Connect extends AppCompatActivity {
                         offline = false;
                         //Создаем объект класса ПГ
                         myPG = new PG414(mBluetoothGatt, mCharacteristic);
-
+                        myPG.set_locale(getResources().getConfiguration().locale.toString());
                         //запускаем фоновый поток
                     }
                     else
                     {
-                        State_of_connection  = "Ошибка подключения";
+                        State_of_connection  = getResources().getString(R.string.err_conncet);;
                     }
                 } catch (Exception e) { this.cancel(false); }
                 if (be_connect) {

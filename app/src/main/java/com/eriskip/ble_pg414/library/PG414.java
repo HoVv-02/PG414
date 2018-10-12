@@ -58,6 +58,8 @@ public class PG414 {
         public String gps;
         public String status;
 
+        public boolean localeRus;                             //Используется ли русский язык как локализация
+
         //Конструктор
         public PG414(BluetoothGatt mBGT,  BluetoothGattCharacteristic Character)
         {
@@ -71,9 +73,17 @@ public class PG414 {
             }
         }
 
+        //Проверка, является ли русской текущая локаль
+        public void set_locale(String text_locale)
+        {
+            char[] ch_locale = text_locale.toCharArray();
+            if (ch_locale[0] == 'r' && ch_locale[1] == 'u')
+                localeRus = true;
+            else
+                localeRus = false;
+        }
 
-
-        public String[] array_of_Errors =
+        public String[] array_of_Errors_RUS =
                 {
                         "Низкий заряд",
                         "Критический заряд",
@@ -121,6 +131,53 @@ public class PG414 {
                         "Ошибка модуля BLE"
 
                 };
+    public String[] array_of_Errors_EN =
+            {
+                    "Low charge",
+                    "Critical charge",
+                    "Alarm 1 - EC 1",
+                    "Alarm 2 - EC. 1",
+                    "Alarm 1 - EC. 2",
+                    "Alarm 2 - EC. 1",
+                    "Alarm 1 - Oxygen",
+                    "Alarm 2 - Oxygen",
+                    "Alarm 1 - Pellistor/Mipex",
+                    "Alarm 2 - Pellistor/Mipex",
+                    "NOT USED",
+                    "Error flash reading",
+                    "Time not set",
+                    "Error sensor table",
+                    "Error sensor table",
+                    "Error sensor table",
+                    "Error sensor table",
+                    "DAC error EC sensors",
+                    "Error config LMP",
+                    "DAC error EC sensors",
+                    "Error config  LMP",
+                    "Error DAC EC sensors",
+                    "Error DAC EC sensors",
+                    "Error DAC EC sensors",
+                    "I2C not work",
+                    "I2C not work",
+                    "NOT USED",
+                    "Over range",
+                    "Over range",
+                    "Over range",
+                    "Over range",
+                    "Error I2C",
+                    "Error I2C",
+                    "Error I2C",
+                    "Error I2C",
+                    "Error I2C",
+                    "Error I2C",
+                    "Error I2C",
+                    "Error flash reading",
+                    "NOT USED",
+                    "Temp sensor defective",
+                    "Pressure sensor defective",
+                    "Error reading log",
+                    "Error module BLE"
+            };
 
         /**********ФУНКЦИИ**********/
         //Запрос на чтение динмических параметров
@@ -217,7 +274,11 @@ public class PG414 {
             {
                 for (byte y = 0; y < 8; y++)
                 {
-                    if (((state[x] >> y) & 0x01) != 0) result += array_of_Errors[indx_err]+"\n";
+                    if (((state[x] >> y) & 0x01) != 0)
+                    if (localeRus)
+                        result += array_of_Errors_RUS[indx_err]+"\n";
+                    else
+                        result += array_of_Errors_EN[indx_err]+"\n";
                     indx_err++;
                 }
             }
