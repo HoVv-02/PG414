@@ -27,11 +27,11 @@
     <string name="params">Чтение параметров</string>
     <string name="offline">Offline режим</string>
     <string name="Stop">Остановить</string>
-    <string name="Get_connect">Need start connect to device</string>
+    <string name="Get_connect">Выполните подключение к устройству</string>
     <string name="Scan">Сканировать</string>
     <string name="Login">Логин:</string>
     <string name="Password">Пароль:</string>
     <string name="Title">Описание:</string>
     <string name="Next">Далее</string>
-    <string name="Device">"\"Прибор: \" "</string>
+    <string name="Device">"Прибор: "</string>
 </resources>
