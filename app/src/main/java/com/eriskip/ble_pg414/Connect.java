@@ -82,7 +82,13 @@ public class Connect extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         //  super.onActivityResult(requestCode, resultCode, data);
-
+        try {
+            if (myPG != null)
+                myPG.mBluetoothGatt.close();
+        }catch (Exception ex)
+        {
+            Log.d(TAG, "Error close connection: " + ex);
+        }
         if (resultCode == RESULT_CANCELED)
         {
             read_pause = true;
@@ -275,7 +281,7 @@ public class Connect extends AppCompatActivity {
     private int mConnectionState = STATE_DISCONNECT;
     private BluetoothAdapter mBluetoothAdapter;
 
-    public BluetoothGatt mBluetoothGatt;
+    public static BluetoothGatt mBluetoothGatt;
     public BluetoothGattCharacteristic mCharacteristic;
     private String bluetoothAddress;
 
@@ -500,19 +506,32 @@ public class Connect extends AppCompatActivity {
             }
         }
 
+       public BluetoothDevice Current_Device;
         @Override
         protected Void doInBackground(Void... params) {
             try {
 
                 breaker = false;            //не обрываем поток
-                BluetoothDevice Current_Device = BLElist.get(index);
+                Current_Device = BLElist.get(index);
                 mBluetoothGatt = Current_Device.connectGatt(Connect.this, true, bluetoothGattCallback);
                 //Ожидание после подключения
                 try {
-                    Thread.sleep( 2000);
+                    Thread.sleep( 2500);
                 }catch (Exception e){}
 
+                short z = 0;
                 List<BluetoothGattService> BLEList = getSupportedGattServices();
+                //Переподключаемся пока не произойдет подключения( 5 попыток)
+                do {
+                    BLEList = getSupportedGattServices();
+                    z++;
+                    if ((BLEList.size() == 0)) {
+                        mBluetoothGatt = Current_Device.connectGatt(Connect.this, true, bluetoothGattCallback);
+                        Thread.sleep(1500);
+                    }
+                }
+                while ((BLEList.size() == 0) && (z < 5));
+
                 Log.d(TAG, "BLEList ITEMS:" + BLEList.size());
                 if (BLEList.size() == 0)
                 {

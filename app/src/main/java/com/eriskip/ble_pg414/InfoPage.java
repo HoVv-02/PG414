@@ -104,7 +104,7 @@ public class InfoPage extends AppCompatActivity {
         }
 
         //Выводим описатели газа
-        gaz1.setText("-");//Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]);
+        gaz1.setText("H2S, ppm");//Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]);
         gaz2.setText("-");//Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);
         gaz3.setText("O2, %об.д.");//Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);
         gaz4.setText("CH4, %об.д.");//Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]);
@@ -219,8 +219,8 @@ public class InfoPage extends AppCompatActivity {
                                 else
                                 if (!connect_server) {
                                     errcon.setText("Нет соединения с сервером. Ошибка связи");
-                                    errcon.setVisibility(View.VISIBLE);
-                                    disconnect.setVisibility(View.VISIBLE);
+                                   // errcon.setVisibility(View.VISIBLE);
+                                   // disconnect.setVisibility(View.VISIBLE);
                                 }
                                 else {
                                     errcon.setVisibility(View.INVISIBLE);
@@ -241,7 +241,9 @@ public class InfoPage extends AppCompatActivity {
                                 if (connToDev > 4)
                                 {
                                     tstatus.setText("Потеряна связь с устройством");
+
                                     Connect.myPG.mBluetoothGatt.connect();
+                                    //tstatus.setText("Потеряна связь с устройством" + Connect.myPG.mBluetoothGatt.);
                                 }
                             }
                         }
@@ -303,10 +305,10 @@ public class InfoPage extends AppCompatActivity {
 
                      params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
                              + "&gps=" + Connect.myPG.gps + "&state=" + Connect.myPG.status
-                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+ "-"
-                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+ "-"                               //gaz2.getText().toString()
-                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+ "O2, %об.д"
-                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ "CH4, %об.д"                            //gaz4.getText().toString()
+                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+"H2S, ppm"//gaz1.getText().toString()
+                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+"-"//gaz2.getText().toString()
+                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+"O2, %об.д."//gaz3.getText().toString()
+                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+"CH4, %Об.д."//gaz4.getText().toString()
                              + "&field1="+ Connect.myPG.percent_charge                                                    //заряд
                              + "&key=1562";
                  } else return null;

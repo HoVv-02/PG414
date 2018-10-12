@@ -240,11 +240,11 @@ public class PG414 {
         //Чистим текст от постороних символов
         public void clean_text()
         {
-            for (byte y = 0; y < 4; y++)
-            {
-                gazType[y] = gazType[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
-                gazUnit[y] = gazUnit[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
-            }
+           //for (byte y = 0; y < 4; y++)
+           //{
+           //    gazType[y] = gazType[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
+           //    gazUnit[y] = gazUnit[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
+           //}
 
         }
 
