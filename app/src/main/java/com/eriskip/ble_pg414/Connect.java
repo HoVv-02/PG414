@@ -30,6 +30,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.io.UnsupportedEncodingException;
+import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -41,6 +42,7 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
 public class Connect extends AppCompatActivity {
 
+    public static boolean hideMode = false;
     byte[] rx_buf;
 
     String State_of_connection;
@@ -66,7 +68,7 @@ public class Connect extends AppCompatActivity {
     public List<BluetoothDevice> BLElist = new ArrayList <>();                          // массив устройств
 
     public static RX_pack State_pack;                                                   // ожидаемый пакет
-    private int delay_module = 500;                                                     // задержка между отправкой команды и чтением ответа
+    private int delay_module = 700;                                                     // задержка между отправкой команды и чтением ответа
 
     private boolean be_connect = false;                                                 // есть ли подключение
     private byte bluetooth_en  = 0;                                                     // включен ли блютуз
@@ -77,6 +79,8 @@ public class Connect extends AppCompatActivity {
 
     public byte numParams = 1;                                                          // номер считываемого параметра
     public boolean breaker = false;                                                     // при сработке обрывает фоновый поток
+
+    public boolean trueRead = false;                                                    // успешное считывание параметров
 
 
     @Override
@@ -423,8 +427,12 @@ public class Connect extends AppCompatActivity {
                     break;
                 /*  Чтение структуры параметров */
                 case READPARAM:
-                        myPG.parseParam(rec_value, numParams);  //парсим структуру под номером numParams
-                        State_of_connection = getResources().getString(R.string.read_params_compl);
+                        if (myPG.parseParam(rec_value, numParams))              //парсим структуру под номером numParams
+                        {
+                            trueRead = true;
+                            State_of_connection = getResources().getString(R.string.read_params_compl);
+                        }
+                        else trueRead = false;
                     break;
 
                 default: peripheralTextView.setText(R.string.un_package);
@@ -465,10 +473,28 @@ public class Connect extends AppCompatActivity {
 
     //Считать данные
     public void ListShow(View view){
-        offline = true;
+
         breaker = true;
         myPG = new PG414(mBluetoothGatt, mCharacteristic);
         myPG.set_locale(getResources().getConfiguration().locale.toString());
+        if (MainActivity.Login.contains("hidemode"))
+            hideMode = true;
+        if (!hideMode) offline = true;
+        ///***HIDE MODE - режим работы без ПГ - заводской номер генерируется из мак адреса блютуза     =====================================
+        String macAddress = "";
+        long zavod_mulage = 0;
+        if (hideMode)
+        {
+            myPG.HIDEMODE = true;
+            macAddress = android.provider.Settings.Secure.getString(getApplicationContext().getContentResolver(), "bluetooth_address");
+            macAddress = macAddress.replaceAll(":", "");     //удаляем из него :
+            macAddress = macAddress.substring(0, 6);
+            zavod_mulage = Long.parseLong(macAddress, 16);              //получаем число с учетом системы счисления
+            Connect.myPG.zavod_mulage = zavod_mulage;
+            Connect.myPG.zavod_number = zavod_mulage;
+            Connect.myPG.status = "ОК";
+
+        }
         Intent intent = new Intent(this, InfoPage.class);
         startActivity(intent);
     }
@@ -529,11 +555,13 @@ public class Connect extends AppCompatActivity {
                     if ((BLEList.size() == 0)) {
                         mBluetoothGatt = Current_Device.connectGatt(Connect.this, true, bluetoothGattCallback);
                         Thread.sleep(1500);
+                        Log.d(TAG, "BLEList ITEMS:" + BLEList.size());
                     }
+                    else break;
                 }
                 while ((BLEList.size() == 0) && (z < 5));
 
-                Log.d(TAG, "BLEList ITEMS:" + BLEList.size());
+
                 if (BLEList.size() == 0)
                 {
                     State_of_connection = getResources().getString(R.string.repeat_error);
@@ -563,6 +591,7 @@ public class Connect extends AppCompatActivity {
                     }
                 } catch (Exception e) { this.cancel(false); }
                 if (be_connect) {
+                    trueRead = false;
                     //Читаем динамические параметры устройства
                     do {
                         myPG.reqDyn();
@@ -573,16 +602,17 @@ public class Connect extends AppCompatActivity {
                         if (breaker) return null;
                     } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
                     publishProgress();
-                    //Читаем параметры №1 устройства
                     do {
-                        numParams = 1;
-                        myPG.reqParam(numParams);
-                        State_pack = RX_pack.READPARAM;
-                        Thread.sleep(delay_module);
-                        myPG.startRead();
-                        Thread.sleep(300);
-                        if (breaker) return null;
-                    } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
+                        //Читаем параметры №1 устройства
+                        do {
+                            numParams = 1;
+                            myPG.reqParam(numParams);
+                            State_pack = RX_pack.READPARAM;
+                            Thread.sleep(delay_module);
+                            myPG.startRead();
+                            Thread.sleep(300);
+                            if (breaker) return null;
+                        } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
                     publishProgress();
                     //Читаем параметры №2 устройства
                     do {
@@ -594,7 +624,8 @@ public class Connect extends AppCompatActivity {
                         Thread.sleep(300);
                         if (breaker) return null;
                     } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
-
+                }
+                    while (!trueRead);
 
                     publishProgress();
                 }

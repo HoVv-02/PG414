@@ -45,19 +45,32 @@ public class MainActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (resultCode == RESULT_CANCELED)
         {
-            finish();    //TMP
+            finish();    // TMP
         }
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mSettings = getSharedPreferences(FILE_SETTINGS, Context.MODE_PRIVATE);
+        mSettings = getPreferences(Context.MODE_PRIVATE);
         setContentView(R.layout.activity_main);
-        //Ассоциируем графические объекты
+        // Ассоциируем графические объекты
         eLogin    = findViewById(R.id.eLogin);
         ePassword = findViewById(R.id.ePassword);
         eDescript = findViewById(R.id.eDescript);
+
+        mSettings = getPreferences(Context.MODE_PRIVATE);
+        // Получаем логин из настроек
+        Login = mSettings.getString(LOGIN_SETTINGS,"");
+        // Получаем пароль из настроек
+        Password = mSettings.getString(PASSWORD_SETTINGS,"");
+        // Получаем адрес модуля из настроек
+        Adress = mSettings.getString(ADRES_SETTINGS,"");
+        // Получаем флаг подключения к модулю
+        bConnect = mSettings.getBoolean(WC_SETTINGS,false);
+        // Получаем текстовый описатель
+        Description = mSettings.getString(DESCRIPT_SETTINGS,"");
+
         eLogin.setText(Login);
         ePassword.setText(Password);
         eDescript.setText(Description);
@@ -70,36 +83,35 @@ public class MainActivity extends AppCompatActivity {
     public void ConnectOpen(View view){
         Login = eLogin.getText().toString();
         Password = ePassword.getText().toString();
-        Description = "ПГ-414." +  eDescript.getText().toString();
+        String Opisatel = eDescript.getText().toString();
+        if (Opisatel.contains("ПГ"))
+            Description = Opisatel;
+        else
+            Description = "ПГ-414." + Opisatel;
         Intent intent = new Intent(this, Connect.class);
         startActivityForResult(intent, CHOOSE_THIEF);
+
+        // Запоминаем данные
+        SharedPreferences.Editor editor = mSettings.edit();
+        editor.putString(LOGIN_SETTINGS, Login);
+        editor.putString(PASSWORD_SETTINGS, Password);
+        editor.putString(DESCRIPT_SETTINGS, Description);
+        editor.putString(ADRES_SETTINGS, Adress);
+        editor.putBoolean(WC_SETTINGS, bConnect);
+
+        editor.commit();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        // Запоминаем данные
-        SharedPreferences.Editor editor = mSettings.edit();
-        editor.putString(LOGIN_SETTINGS, Login);
-        editor.putString(PASSWORD_SETTINGS, Password);
-        editor.putString(ADRES_SETTINGS, Adress);
-        editor.putBoolean(WC_SETTINGS, bConnect);
 
-        editor.apply();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-            // Получаем логин из настроек
-            Login = mSettings.getString(LOGIN_SETTINGS,"nop");
-            // Получаем пароль из настроек
-            Password = mSettings.getString(PASSWORD_SETTINGS,"nop");
-            // Получаем адрес модуля из настроек
-            Adress = mSettings.getString(ADRES_SETTINGS,"nop");
-            // Получаем флаг подключения к модулю
-            bConnect = mSettings.getBoolean(WC_SETTINGS,false);
-            // Получаем текстовый описатель
+
     }
 }
 

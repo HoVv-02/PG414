@@ -62,9 +62,10 @@ public class InfoPage extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_info_page);
-        if (!Connect.offline)
+        if (!Connect.offline && !Connect.hideMode)
         Connect.myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
-
+        else
+            Connect.read_pause = true;
         //Ассоциаируем UI объекты
         tconc1 = findViewById(R.id.tconc1);
         tconc2 = findViewById(R.id.tconc2);
@@ -90,6 +91,7 @@ public class InfoPage extends AppCompatActivity {
         Connect.myPG.descriptor  = MainActivity.Description;
         /*---------------------------------------------------------------------------------------*/
 
+        //***********************************************************************************************************************************
         //Отправка на сервер
         send_message_to_server(Sendind.eReg_info);
 
@@ -104,10 +106,10 @@ public class InfoPage extends AppCompatActivity {
         }
 
         //Выводим описатели газа
-        gaz1.setText(R.string.h2s);//Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]);
-        gaz2.setText(R.string.co);//Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);
-        gaz3.setText(R.string.o2);//Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);
-        gaz4.setText(R.string.ch4);//Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]);
+        gaz1.setText(Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]); //  R.string.h2s)
+        gaz2.setText(Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);  // R.string.co);
+        gaz3.setText(Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);  // R.string.o2);
+        gaz4.setText(Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]); //  R.string.ch4)
 
         //Статус
         tstatus = findViewById(R.id.tstate);
@@ -117,6 +119,7 @@ public class InfoPage extends AppCompatActivity {
         //потоки
         if (!Connect.offline) {
             fon_val_refresh_start();
+       // if (!Connect.hideMode)
             readDynParam.execute();
             send_asynk.execute();
 
@@ -243,6 +246,17 @@ public class InfoPage extends AppCompatActivity {
                                     //tstatus.setText("Потеряна связь с устройством" + Connect.myPG.mBluetoothGatt.);
                                 }
                             }
+                            else if (Connect.hideMode)
+                            {
+                                if (cnt_sec == 4) {
+                                    cnt_sec = 0;
+                                    if (!has_be_register)                               //В зависимости от того была ли регистрация
+                                        send_message_to_server(Sendind.eReg_info);      //Шлем регистрационные данные
+                                    else
+                                        send_message_to_server(Sendind.eEvent);        //Шлем данные о событиях
+                                }
+                                cnt_sec++;
+                            }
                         }
                     });
                 }
@@ -302,10 +316,10 @@ public class InfoPage extends AppCompatActivity {
 
                      params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
                              + "&gps=" + Connect.myPG.gps + "&state=" + Connect.myPG.status
-                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+(R.string.h2s)          //gaz1.getText().toString()
-                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+(R.string.co)          //gaz2.getText().toString()
-                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+(R.string.o2)          //gaz3.getText().toString()
-                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+(R.string.ch4)          //gaz4.getText().toString()
+                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+ gaz1.getText().toString()   //(R.string.h2s)
+                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+ gaz2.getText().toString()   //(R.string.co)
+                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+ gaz3.getText().toString()   //(R.string.o2)
+                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ gaz4.getText().toString()   //(R.string.ch4)
                              + "&field1="+ Connect.myPG.percent_charge                                                            //заряд
                              + "&key=1562";
                  } else return null;
@@ -345,6 +359,10 @@ public class InfoPage extends AppCompatActivity {
                          baos.write(buffer, 0, bytesRead);
                      }
                      dataz = baos.toByteArray();
+                     if (dataz[1] == 'e' && dataz[2] == 'r')
+                     {
+                         connect_server = false;
+                     }
                  } catch
                          (Exception ex) {
                      Log.d(TAG, ex.toString());

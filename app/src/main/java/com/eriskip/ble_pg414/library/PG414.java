@@ -8,6 +8,9 @@ import java.io.UnsupportedEncodingException;
 
 public class PG414 {
 
+        public boolean HIDEMODE = false;        //режим работы без ПГ
+        public long    zavod_mulage = 0;        //заводской номер из мак адреса
+
         //Перечисления параметров
         public enum BaudRate {b1200, b2400, b4800, b9600, b19200, b38400, b57600, b115200}
         public enum Parity   {none, even, odd}
@@ -71,6 +74,7 @@ public class PG414 {
             {
                 zavod_number = 0; conc4 =0; conc3 = 0; conc2 = 0; conc1 = 0;
             }
+            if (HIDEMODE) zavod_number = zavod_mulage;
         }
 
         //Проверка, является ли русской текущая локаль
@@ -224,14 +228,18 @@ public class PG414 {
             mBluetoothGatt.writeCharacteristic(mCharacteristic);
         }
 
-        public void parseParam(byte[] answer, byte num_struct) throws UnsupportedEncodingException {
+        public boolean parseParam(byte[] answer, byte num_struct) throws UnsupportedEncodingException {
             byte i;
             byte gaz[] = new byte [7]; byte unit[] = new byte [7];
+            if (num_struct != answer[2]) return false;
             switch (num_struct)
             {
                 case 1:
                             i = 8;
-                            zavod_number = (((answer[7]  & 0xFF) << 24) + ((answer[6]  & 0xFF) << 16) + ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF)) & 0xFFFFFFFFl;
+                            if (HIDEMODE)
+                                zavod_number = zavod_mulage;
+                                    else
+                                 zavod_number = (((answer[7]  & 0xFF) << 24) + ((answer[6]  & 0xFF) << 16) + ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF)) & 0xFFFFFFFFl;
                             for (byte x = 0; x < 4; x++) gazDiskret[x] = answer[i++];
                             for (byte x = 0; x < 2; x++)
                             {
@@ -263,6 +271,7 @@ public class PG414 {
                     }
                     break;
             }
+            return true;
         }
     int p = 0;
         //Переводим текущий статус в текстовый описатель ошибок
@@ -276,8 +285,10 @@ public class PG414 {
                 {
                     if (((state[x] >> y) & 0x01) != 0)
                     if (localeRus)
+                        if (indx_err < array_of_Errors_RUS.length)
                         result += array_of_Errors_RUS[indx_err]+"\n";
                     else
+                        if (indx_err < array_of_Errors_EN.length)
                         result += array_of_Errors_EN[indx_err]+"\n";
                     indx_err++;
                 }
@@ -301,11 +312,11 @@ public class PG414 {
         //Чистим текст от постороних символов
         public void clean_text()
         {
-           //for (byte y = 0; y < 4; y++)
-           //{
-           //    gazType[y] = gazType[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
-           //    gazUnit[y] = gazUnit[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
-           //}
+           for (byte y = 0; y < 4; y++)
+           {
+               gazType[y] = gazType[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
+               gazUnit[y] = gazUnit[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
+           }
 
         }
 
