@@ -119,7 +119,6 @@ public class InfoPage extends AppCompatActivity {
         //потоки
         if (!Connect.offline) {
             fon_val_refresh_start();
-       // if (!Connect.hideMode)
             readDynParam.execute();
             send_asynk.execute();
 
