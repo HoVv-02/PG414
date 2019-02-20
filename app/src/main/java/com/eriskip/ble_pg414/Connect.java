@@ -14,9 +14,11 @@ import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.support.annotation.NonNull;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.method.ScrollingMovementMethod;
@@ -25,6 +27,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -487,12 +490,19 @@ public class Connect extends AppCompatActivity {
         {
             myPG.HIDEMODE = true;
             macAddress = android.provider.Settings.Secure.getString(getApplicationContext().getContentResolver(), "bluetooth_address");
-            macAddress = macAddress.replaceAll(":", "");     //удаляем из него :
-            macAddress = macAddress.substring(0, 6);
-            zavod_mulage = Long.parseLong(macAddress, 16);              //получаем число с учетом системы счисления
-            Connect.myPG.zavod_mulage = zavod_mulage;
-            Connect.myPG.zavod_number = zavod_mulage;
-            Connect.myPG.status = "ОК";
+            if (macAddress != null) {
+                macAddress = macAddress.replaceAll(":", "");     //удаляем из него :
+                macAddress = macAddress.substring(0, 6);
+                zavod_mulage = Long.parseLong(macAddress, 16);              //получаем число с учетом системы счисления
+                Connect.myPG.zavod_mulage = zavod_mulage;
+                Connect.myPG.zavod_number = zavod_mulage;
+                Connect.myPG.status = "ОК";
+            }
+            else
+            {
+                Connect.myPG.zavod_number = 999000;
+                Connect.myPG.status = "ОК";
+            }
 
         }
         Intent intent = new Intent(this, InfoPage.class);
@@ -506,6 +516,9 @@ public class Connect extends AppCompatActivity {
         READPARAM,
         COMPLETE,
     }
+
+
+
 
     //Асинхроннный поток для выполнения подключения
     class MyTask extends AsyncTask<Void, Void, Void> {
@@ -521,6 +534,7 @@ public class Connect extends AppCompatActivity {
             Intent intent = new Intent(Connect.this, InfoPage.class);
             startActivityForResult(intent, CHOOSE_THIEF);
         }
+
 
         @Override
         protected void onProgressUpdate(Void... values) {
@@ -543,7 +557,7 @@ public class Connect extends AppCompatActivity {
                 mBluetoothGatt = Current_Device.connectGatt(Connect.this, true, bluetoothGattCallback);
                 //Ожидание после подключения
                 try {
-                    Thread.sleep( 2500);
+                    Thread.sleep( 2000);
                 }catch (Exception e){}
 
                 short z = 0;

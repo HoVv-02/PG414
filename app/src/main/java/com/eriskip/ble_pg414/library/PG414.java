@@ -14,7 +14,7 @@ public class PG414 {
         //Перечисления параметров
         public enum BaudRate {b1200, b2400, b4800, b9600, b19200, b38400, b57600, b115200}
         public enum Parity   {none, even, odd}
-        public enum StopBit  {b1,b2}
+        public enum StopBit  {b1, b2}
 
         /*Указатели на внешние классы*/
         public BluetoothGatt mBluetoothGatt;
@@ -204,7 +204,7 @@ public class PG414 {
         {
             conc1 = ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF);
             conc2 = ((answer[7]  & 0xFF) << 8) + (answer[6]  & 0xFF);
-            conc3 = ((answer[9] & 0xFF) << 8) +  (answer[8] & 0xFF);
+            conc3 = ((answer[9]  & 0xFF) << 8) +  (answer[8] & 0xFF);
             conc4 = ((answer[11] & 0xFF) << 8) +  (answer[10] & 0xFF);
             for(byte x = 0; x < 8; x++)
             {

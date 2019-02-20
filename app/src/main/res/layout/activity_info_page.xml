@@ -104,9 +104,9 @@
         android:layout_width="150dp"
         android:layout_height="49dp"
         android:layout_marginBottom="17dp"
-        android:onClick="NullOut"
-        android:text="Подробнее"
-        android:visibility="invisible"
+        android:onClick="enter_server"
+        android:text="@string/Config_but"
+        android:visibility="visible"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/button2"
         app:layout_constraintStart_toStartOf="parent" />

@@ -34,4 +34,6 @@
     <string name="Next">Next</string>
     <string name="Get_connect">Need start connect to device</string>
     <string name="Device">"Device: "</string>
+    <string name="Config_but">"Configuration"</string>
+    <string name="Enter_server">"Enter server address"</string>
 </resources>

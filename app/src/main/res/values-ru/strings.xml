@@ -34,4 +34,6 @@
     <string name="Title">Описание:</string>
     <string name="Next">Далее</string>
     <string name="Device">"Прибор: "</string>
+    <string name="Config_but">"Конфигурация"</string>
+    <string name="Enter_server">"Введите адрес сервера"</string>
 </resources>

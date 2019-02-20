@@ -2,18 +2,24 @@ package com.eriskip.ble_pg414;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
+import android.os.PowerManager;
 import android.renderscript.ScriptGroup;
 import android.support.v4.app.ActivityCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -31,9 +37,12 @@ import java.util.TimerTask;
 
 public class InfoPage extends AppCompatActivity {
 
-    public String URL_reg = "http://89.250.220.50:8001/dev_add.php";
-    public String URL_event = "http://89.250.220.50:8001/event_add.php";
+    public String URL_reg = "/dev_add.php";
+    public String URL_event = "/event_add.php";
     private static final String TAG = "Connection PG414";
+ //   PowerManager pm;                                //Power Manager для управления питанием устройства
+ //   PowerManager.WakeLock wakeLock;                 //конкретный объект который управляет отключение экрана и тп.
+
 
     enum Sendind{eReg_info, eEvent, eNone}
 
@@ -60,7 +69,6 @@ public class InfoPage extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_info_page);
         if (!Connect.offline && !Connect.hideMode)
         Connect.myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
@@ -139,7 +147,7 @@ public class InfoPage extends AppCompatActivity {
     {
         //При остановке отключаем GPS позиционирование
         super.onPause();
-        manager.removeUpdates(listener);
+       manager.removeUpdates(listener);
 
     }
 
@@ -156,6 +164,7 @@ public class InfoPage extends AppCompatActivity {
                 while (true) {
 
                     if (isCancelled()) return null;
+
                     sending_reg_info();
                     //Если не пришла команда паузы чтения
                     if (!Connect.read_pause) {
@@ -163,7 +172,7 @@ public class InfoPage extends AppCompatActivity {
                         //Чтение статуса
                         Connect.myPG.reqDyn();
                         Connect.State_pack = Connect.RX_pack.DYNPARAM;
-                        Thread.sleep(1300);
+                        Thread.sleep(2300);
                         Connect.myPG.startRead();
                         while (Connect.State_pack != Connect.RX_pack.COMPLETE)
                             ;                      //ждем пока не прочтется
@@ -268,8 +277,16 @@ public class InfoPage extends AppCompatActivity {
             @Override
             public void onLocationChanged(Location location) {
                 if (location!=null) {
-                    tgps.setText(location.getLatitude() + ", \r" + location.getLongitude());
-                    Connect.myPG.gps = (location.getLatitude() + ", " + location.getLongitude());
+                    String lat;
+                    String longt;
+                    String result;
+                    lat = location.getLatitude() + "";
+                    longt = location.getLongitude() + "";
+                    if (lat.length() > 12) lat = lat.substring(0, 11);
+                    if (longt.length() > 12) longt = lat.substring(0, 11);
+                    result = lat +  ", " + longt;
+                    tgps.setText(lat + ", \r" + longt);
+                    Connect.myPG.gps = result;
                 }
                 else
                 {
@@ -328,9 +345,9 @@ public class InfoPage extends AppCompatActivity {
                  try {
                      URL url;
                      if (Send_Message == Sendind.eReg_info)
-                         url = new URL(URL_reg);
+                         url = new URL(MainActivity.Server + URL_reg);
                      else
-                         url = new URL(URL_event);
+                         url = new URL(MainActivity.Server + URL_event);
                      HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                      conn.setRequestMethod("POST");
                      conn.setDoOutput(true);
@@ -356,8 +373,8 @@ public class InfoPage extends AppCompatActivity {
                      int bytesRead;
                      while ((bytesRead = is.read(buffer)) != -1) {
                          baos.write(buffer, 0, bytesRead);
-                     }
-                     dataz = baos.toByteArray();
+                     }dataz = baos.toByteArray();
+
                      if (dataz[1] == 'e' && dataz[2] == 'r')
                      {
                          connect_server = false;
@@ -390,6 +407,41 @@ public class InfoPage extends AppCompatActivity {
          {
              Send_Message = params;
          }
+
+
+    //Ввод адреса сервера
+    protected void enter_server(View view)
+    {
+        AlertDialog.Builder alert = new AlertDialog.Builder(InfoPage.this, R.style.AlertDialogCustom);
+
+        alert.setTitle(getString(R.string.Config_but));
+        alert.setMessage(getString(R.string.Enter_server));
+
+        // Set an EditText view to get user input
+        final EditText input = new EditText(InfoPage.this);
+        input.setText(MainActivity.Server);
+        input.setTextColor(Color.rgb(232, 228, 211));
+        alert.setView(input);
+
+        alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int whichButton) {
+                String resulty = input.getText().toString();
+                //
+                MainActivity.Server = resulty;
+                SharedPreferences.Editor editor = MainActivity.mSettings.edit();
+                editor.putString(MainActivity.SERVER_SETTING,  resulty);
+                editor.commit();
+            }
+        });
+
+        alert.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int whichButton) {
+                // Canceled.
+            }
+        });
+
+        alert.show();
+    }
 }
 
 

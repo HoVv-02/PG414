@@ -30,13 +30,14 @@ public class MainActivity extends AppCompatActivity {
 
 
     //>>>>> Настройки     -------------------------------------------------------------------
-    private SharedPreferences mSettings;
-    public String FILE_SETTINGS        =  "configs";
-    public String LOGIN_SETTINGS       =    "login";   public static String  Login       = "";
-    public String PASSWORD_SETTINGS     ="password";   public static String  Password    = "";
-    public String ADRES_SETTINGS     =      "adres";   public static String  Adress      = "";
-    public String WC_SETTINGS   =        "bconnect";   public static boolean bConnect;
-    public String DESCRIPT_SETTINGS  =       "desc";   public static String  Description = "";
+    static public SharedPreferences mSettings;
+    public static String FILE_SETTINGS        =  "configs";
+    public static String LOGIN_SETTINGS       =    "login";   public static String  Login       = "";
+    public static String PASSWORD_SETTINGS     ="password";   public static String  Password    = "";
+    public static String ADRES_SETTINGS     =      "adres";   public static String  Adress      = "";
+    public static String WC_SETTINGS   =        "bconnect";   public static boolean bConnect;
+    public static String DESCRIPT_SETTINGS  =       "desc";   public static String  Description = "";
+    public static String SERVER_SETTING      =    "server";   public static String  Server       = "";
     //---------------------------------------------------------------------------------------
 
     EditText eLogin, ePassword, eDescript;
@@ -70,6 +71,8 @@ public class MainActivity extends AppCompatActivity {
         bConnect = mSettings.getBoolean(WC_SETTINGS,false);
         // Получаем текстовый описатель
         Description = mSettings.getString(DESCRIPT_SETTINGS,"");
+        // Получаем сервер подключения
+        Server = mSettings.getString(SERVER_SETTING,"http://89.250.220.50:8001");
 
         eLogin.setText(Login);
         ePassword.setText(Password);
