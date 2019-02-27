@@ -1,6 +1,13 @@
 package com.eriskip.ble_pg414;
 
 import android.Manifest;
+import android.app.AlarmManager;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.job.JobInfo;
+import android.app.job.JobScheduler;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -11,9 +18,12 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.renderscript.ScriptGroup;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -24,6 +34,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -37,8 +48,8 @@ import java.util.TimerTask;
 
 public class InfoPage extends AppCompatActivity {
 
-    public String URL_reg = "/dev_add.php";
-    public String URL_event = "/event_add.php";
+    public static String URL_reg = "/dev_add.php";
+    public static String URL_event = "/event_add.php";
     private static final String TAG = "Connection PG414";
  //   PowerManager pm;                                //Power Manager для управления питанием устройства
  //   PowerManager.WakeLock wakeLock;                 //конкретный объект который управляет отключение экрана и тп.
@@ -46,10 +57,10 @@ public class InfoPage extends AppCompatActivity {
 
     enum Sendind{eReg_info, eEvent, eNone}
 
-    Sendind Send_Message = Sendind.eReg_info;                                               //переменная, которая отвечает за то какой сейчас пакет отправляется на сервер
+    public static Sendind Send_Message = Sendind.eReg_info;                                               //переменная, которая отвечает за то какой сейчас пакет отправляется на сервер
 
     //>>>>>  UI ------------------------------------------------------------------------------------
-    TextView tconc1, tconc2, tconc3, tconc4, tzavod, gaz1, gaz2, gaz3, gaz4, tgps, tstatus,
+    public static TextView tconc1, tconc2, tconc3, tconc4, tzavod, gaz1, gaz2, gaz3, gaz4, tgps, tstatus,
              charge, errcon;                                                                             //текстовые поля
     ImageView disconnect;
     //----------------------------------------------------------------------------------------------
@@ -57,11 +68,11 @@ public class InfoPage extends AppCompatActivity {
     public static TaskDynRead readDynParam;         //поток чтения параметров
     public   MyTask_reg send_asynk;                 //поток отправки сообщений
 
-    LocationManager manager;                        //мэнеджер локаций для работы с GPS и NetService
+    public static LocationManager manager;                        //мэнеджер локаций для работы с GPS и NetService
 
-    boolean connect_server =  false;                //соединение с сервером
-    boolean user_register =   true;                 //подошел ли пароль
-    boolean has_be_register = false;                //было ли зарегистрированно устройство
+    public static boolean connect_server =  false;                //соединение с сервером
+    public static boolean user_register =   true;                 //подошел ли пароль
+    public static boolean has_be_register = false;                //было ли зарегистрированно устройство
 
 
     public int connToDev = 0;                      // попытки подключения
@@ -124,30 +135,40 @@ public class InfoPage extends AppCompatActivity {
 
         readDynParam = new TaskDynRead();
         send_asynk = new MyTask_reg();
+        //якорь
+        startService(new Intent(this, PG_Service.class));
+        //----------------------------------
         //потоки
         if (!Connect.offline) {
             fon_val_refresh_start();
             readDynParam.execute();
             send_asynk.execute();
 
+
         }
     }
 
+    public static void runGPS()
+    {
+        manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 2, listener);
+        manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 2, listener);
+    }
     @Override
     protected void onResume()
     {
-        //При восстановлении работы внось запускаем GPS & NEY провайдеров для определения координат
+        //При восстановлении работы вновь запускаем GPS & NEY провайдеров для определения координат
         super.onResume();
-        manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 2, listener);
-        manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 2, listener);
+        runGPS();
+        Log.d("ON RESUME RUN", "Я проснулся");
     }
 
     @Override
     protected void onPause()
     {
+        Log.d("ON PAUSE RUN", "Я пошел спать");
         //При остановке отключаем GPS позиционирование
         super.onPause();
-       manager.removeUpdates(listener);
+      //  manager.removeUpdates(listener);
 
     }
 
@@ -168,14 +189,21 @@ public class InfoPage extends AppCompatActivity {
                     sending_reg_info();
                     //Если не пришла команда паузы чтения
                     if (!Connect.read_pause) {
-                        connToDev = 0;
+                        if (Connect.State_pack == Connect.RX_pack.COMPLETE )  connToDev = 0;
+                        Log.d("ПГ-414","Делаю запрос");
                         //Чтение статуса
                         Connect.myPG.reqDyn();
                         Connect.State_pack = Connect.RX_pack.DYNPARAM;
                         Thread.sleep(2300);
                         Connect.myPG.startRead();
-                        while (Connect.State_pack != Connect.RX_pack.COMPLETE)
+                        while (Connect.State_pack != Connect.RX_pack.COMPLETE && abort_counter < 5)
                             ;                      //ждем пока не прочтется
+                        if (abort_counter >= 5)
+                            Log.d("ПГ-414","Не могу достучасться");
+                        else
+                            Log.d("ПГ-414","Прочитал");
+
+                        abort_counter = 0;
                     }
                 }
 
@@ -187,6 +215,7 @@ public class InfoPage extends AppCompatActivity {
     }
 
         public byte cnt_sec = 0;
+        byte abort_counter = 0;
 
         ///Таймер для обновления графического интерфейса в зависимости от показаний
         public  Timer timer;
@@ -201,70 +230,9 @@ public class InfoPage extends AppCompatActivity {
 
                         @Override
                         public void run() {
-                            if (!Connect.read_pause) {
-                                NumberFormat nf[] = new NumberFormat[4];
-                                for (byte j =0; j < 4; j++)
-                                {
-                                    nf[j] = NumberFormat.getInstance();
-                                    nf[j].setMaximumFractionDigits(Connect.myPG.gazDiskret[j]*(-1));
-                                    nf[j].setMinimumFractionDigits(Connect.myPG.gazDiskret[j]*(-1));
-                                    nf[j].setGroupingUsed(false);
-                                }
-                                //В данном коде выводим форматированную     концентрацию                 при этом учитываем          дискретность
-                                tconc1.setText(nf[0].format(Connect.myPG.conc1/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[0]*(-1)])));
-                                tconc2.setText(nf[1].format(Connect.myPG.conc2/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[1]*(-1)])));
-                                tconc3.setText(nf[2].format(Connect.myPG.conc3/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[2]*(-1)])));
-                                tconc4.setText(nf[3].format(Connect.myPG.conc4/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[3]*(-1)])));
-
-                                charge.setText(getResources().getString(R.string.Charge) + Connect.myPG.percent_charge + "%");
-
-                                tstatus.setText(Connect.myPG.Make_State());
-                                if (!user_register && connect_server)
-                                {
-                                    errcon.setText(R.string.un_logi);
-                                    errcon.setVisibility(View.VISIBLE);
-                                }
-                                else
-                                if (!connect_server) {
-                                    errcon.setText(R.string.Server_aerror);
-                                    errcon.setVisibility(View.VISIBLE);
-                                    disconnect.setVisibility(View.VISIBLE);
-                                }
-                                else {
-                                    errcon.setVisibility(View.INVISIBLE);
-                                    disconnect.setVisibility(View.INVISIBLE);
-                                }
-
-
-                                if (cnt_sec == 4) {
-                                    cnt_sec = 0;
-                                    if (!has_be_register)                               //В зависимости от того была ли регистрация
-                                        send_message_to_server(Sendind.eReg_info);      //Шлем регистрационные данные
-                                    else
-                                        send_message_to_server(Sendind.eEvent);        //Шлем данные о событиях
-                                }
-                                cnt_sec++;
-
-                                connToDev++;
-                                if (connToDev > 4)
-                                {
-                                    tstatus.setText(R.string.err_con_dev);
-
-                                    Connect.myPG.mBluetoothGatt.connect();
-                                    //tstatus.setText("Потеряна связь с устройством" + Connect.myPG.mBluetoothGatt.);
-                                }
-                            }
-                            else if (Connect.hideMode)
-                            {
-                                if (cnt_sec == 4) {
-                                    cnt_sec = 0;
-                                    if (!has_be_register)                               //В зависимости от того была ли регистрация
-                                        send_message_to_server(Sendind.eReg_info);      //Шлем регистрационные данные
-                                    else
-                                        send_message_to_server(Sendind.eEvent);        //Шлем данные о событиях
-                                }
-                                cnt_sec++;
-                            }
+                            UI_update();            //Обновление UI и отправка на сервер
+                            Construct_JobInfo();
+                            abort_counter++;        //Увеличиваем счетчик сброса
                         }
                     });
                 }
@@ -273,7 +241,7 @@ public class InfoPage extends AppCompatActivity {
 
 
         /**---------------------------------------------------------------*GPS*--------------------------------------------------------------**/
-        private LocationListener listener = new LocationListener() {
+        private static  LocationListener listener = new LocationListener() {
             @Override
             public void onLocationChanged(Location location) {
                 if (location!=null) {
@@ -283,7 +251,7 @@ public class InfoPage extends AppCompatActivity {
                     lat = location.getLatitude() + "";
                     longt = location.getLongitude() + "";
                     if (lat.length() > 12) lat = lat.substring(0, 11);
-                    if (longt.length() > 12) longt = lat.substring(0, 11);
+                    if (longt.length() > 12) longt = longt.substring(0, 11);
                     result = lat +  ", " + longt;
                     tgps.setText(lat + ", \r" + longt);
                     Connect.myPG.gps = result;
@@ -316,8 +284,9 @@ public class InfoPage extends AppCompatActivity {
 
             }
         }
-         public byte[] sending_reg_info()
+         public static byte[] sending_reg_info()
          {
+             Log.d("На ервер","отправляю");
              int p = 0;
              if (Send_Message != Sendind.eNone) {
                  String params = "";
@@ -442,6 +411,102 @@ public class InfoPage extends AppCompatActivity {
 
         alert.show();
     }
+
+    //*******************TEST ZONE***************************
+    //*******************************************************
+    public void Construct_JobInfo()
+    {
+
+    }
+
+    public void UI_update()
+    {
+            if (!Connect.read_pause) {
+                NumberFormat nf[] = new NumberFormat[4];
+                for (byte j =0; j < 4; j++)
+                {
+                    nf[j] = NumberFormat.getInstance();
+                    nf[j].setMaximumFractionDigits(Connect.myPG.gazDiskret[j]*(-1));
+                    nf[j].setMinimumFractionDigits(Connect.myPG.gazDiskret[j]*(-1));
+                    nf[j].setGroupingUsed(false);
+                }
+                //В данном коде выводим форматированную     концентрацию                 при этом учитываем          дискретность
+                tconc1.setText(nf[0].format(Connect.myPG.conc1/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[0]*(-1)])));
+                tconc2.setText(nf[1].format(Connect.myPG.conc2/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[1]*(-1)])));
+                tconc3.setText(nf[2].format(Connect.myPG.conc3/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[2]*(-1)])));
+                tconc4.setText(nf[3].format(Connect.myPG.conc4/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[3]*(-1)])));
+
+                charge.setText(getResources().getString(R.string.Charge) + Connect.myPG.percent_charge + "%");
+
+                tstatus.setText(Connect.myPG.Make_State());
+                if (!user_register && connect_server)
+                {
+                    errcon.setText(R.string.un_logi);
+                    errcon.setVisibility(View.VISIBLE);
+                }
+                else
+                if (!connect_server) {
+                    errcon.setText(R.string.Server_aerror);
+                    errcon.setVisibility(View.VISIBLE);
+                    disconnect.setVisibility(View.VISIBLE);
+                }
+                else {
+                    errcon.setVisibility(View.INVISIBLE);
+                    disconnect.setVisibility(View.INVISIBLE);
+                }
+
+
+                if (cnt_sec == 5) {
+                    cnt_sec = 0;
+                    if (!has_be_register)                               //В зависимости от того была ли регистрация
+                        send_message_to_server(Sendind.eReg_info);      //Шлем регистрационные данные
+                    else
+                        send_message_to_server(Sendind.eEvent);        //Шлем данные о событиях
+                }
+                cnt_sec++;
+
+                connToDev++;
+                if (connToDev > 222) connToDev = 8;
+                if (connToDev > 5)
+                {
+                    tstatus.setText(R.string.err_con_dev);
+                    ShowMessageForDisconnect();
+                    Connect.myPG.mBluetoothGatt.connect();
+                }
+            }
+            else if (Connect.hideMode)
+            {
+                if (cnt_sec == 5) {
+                    cnt_sec = 0;
+                    if (!has_be_register)                               //В зависимости от того была ли регистрация
+                        send_message_to_server(Sendind.eReg_info);      //Шлем регистрационные данные
+                    else
+                        send_message_to_server(Sendind.eEvent);        //Шлем данные о событиях
+                }
+                cnt_sec++;
+            }
+
+    }
+
+
+    //Выводим уведомление
+    void ShowMessageForDisconnect()
+    {
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
+                        .setSmallIcon(R.drawable.avrr)
+                        .setContentTitle("Внимание")
+                        .setContentText("Потеряна связь с устройством!")
+                        .setAutoCancel(true)
+                        .setPriority(Notification.PRIORITY_MAX);
+
+        Notification notification = builder.build();
+
+// Show Notification
+        NotificationManager notificationManager =
+                (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        notificationManager.notify(196, notification);
+    }
+//-----------------------------------------------------------------------------------------------
 }
 
 

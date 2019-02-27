@@ -187,14 +187,16 @@ public class Connect extends AppCompatActivity {
         @Override
         public void onScanResult(int callbackType, ScanResult result)
         {
-            currentDevice =getResources().getString(R.string.Device)+ result.getDevice().getName();                         //текущее устройство
-            if (!DeviceList.contains(currentDevice)) {                                         //если тек. устройства нет в списке
-                DeviceList.add(currentDevice);                                                 //добавляем его
-                BLElist.add(result.getDevice());                                               //пишем в список наших устройств
+            if (result.getDevice().getName().contains("PG")) {
+                currentDevice = getResources().getString(R.string.Device) + result.getDevice().getName();                         //текущее устройство
+                if (!DeviceList.contains(currentDevice)) {                                         //если тек. устройства нет в списке
+                    DeviceList.add(currentDevice);                                                 //добавляем его
+                    BLElist.add(result.getDevice());                                               //пишем в список наших устройств
+                }
+                //Обновляем listview
+                ArrayAdapter<String> AdapterTMP = new ArrayAdapter<String>(Connect.this, android.R.layout.simple_list_item_1, DeviceList);
+                deviceList.setAdapter(AdapterTMP);
             }
-            //Обновляем listview
-            ArrayAdapter<String> AdapterTMP = new ArrayAdapter<String>(Connect.this, android.R.layout.simple_list_item_1, DeviceList);
-            deviceList.setAdapter(AdapterTMP);
         }
     };
 
@@ -295,6 +297,7 @@ public class Connect extends AppCompatActivity {
 
     //Обратный вызов GATT сервиса устройства
     public BluetoothGattCallback bluetoothGattCallback = new BluetoothGattCallback() {
+
         @Override
         //При подключении
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
