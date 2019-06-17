@@ -187,6 +187,7 @@ public class Connect extends AppCompatActivity {
         @Override
         public void onScanResult(int callbackType, ScanResult result)
         {
+            if (result.getDevice().getName()!=null)                                                //имя может быть null - поэтому contains вызывает исключение
             if (result.getDevice().getName().contains("PG")) {
                 currentDevice = getResources().getString(R.string.Device) + result.getDevice().getName();                         //текущее устройство
                 if (!DeviceList.contains(currentDevice)) {                                         //если тек. устройства нет в списке

@@ -17,6 +17,7 @@ import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.location.LocationProvider;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.PowerManager;
@@ -40,6 +41,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.NumberFormat;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -68,7 +70,8 @@ public class InfoPage extends AppCompatActivity {
     public static TaskDynRead readDynParam;         //поток чтения параметров
     public   MyTask_reg send_asynk;                 //поток отправки сообщений
 
-    public static LocationManager manager;                        //мэнеджер локаций для работы с GPS и NetService
+    public static LocationManager manager;                        //менеджер локаций для работы с GPS
+    public static LocationManager managerNet;                     //менеджер локаций для работы с сервисами от гугл
 
     public static boolean connect_server =  false;                //соединение с сервером
     public static boolean user_register =   true;                 //подошел ли пароль
@@ -118,11 +121,14 @@ public class InfoPage extends AppCompatActivity {
         //GPS
         tgps = findViewById(R.id.tgps);
         manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        managerNet = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             tgps.setText("Запрет на геолокацию");
             return;
         }
+
+
 
         //Выводим описатели газа
         gaz1.setText(Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]); //  R.string.h2s)
@@ -135,8 +141,11 @@ public class InfoPage extends AppCompatActivity {
 
         readDynParam = new TaskDynRead();
         send_asynk = new MyTask_reg();
-        //якорь
+
         startService(new Intent(this, PG_Service.class));
+        //Обновляем GPS
+        Location lastKnownLocation = getLastKnownLocation();
+        UpdateLocation(lastKnownLocation);
         //----------------------------------
         //потоки
         if (!Connect.offline) {
@@ -151,8 +160,10 @@ public class InfoPage extends AppCompatActivity {
     public static void runGPS()
     {
         manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 2, listener);
-        manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 2, listener);
+        if (managerNet.getProvider(LocationManager.NETWORK_PROVIDER) != null)
+        managerNet.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 2, listener);
     }
+
     @Override
     protected void onResume()
     {
@@ -244,22 +255,7 @@ public class InfoPage extends AppCompatActivity {
         private static  LocationListener listener = new LocationListener() {
             @Override
             public void onLocationChanged(Location location) {
-                if (location!=null) {
-                    String lat;
-                    String longt;
-                    String result;
-                    lat = location.getLatitude() + "";
-                    longt = location.getLongitude() + "";
-                    if (lat.length() > 12) lat = lat.substring(0, 11);
-                    if (longt.length() > 12) longt = longt.substring(0, 11);
-                    result = lat +  ", " + longt;
-                    tgps.setText(lat + ", \r" + longt);
-                    Connect.myPG.gps = result;
-                }
-                else
-                {
-                    tgps.setText("x");
-                }
+                UpdateLocation(location);
             }
             @Override
             public void onStatusChanged(String provider, int status, Bundle extras) {
@@ -272,6 +268,26 @@ public class InfoPage extends AppCompatActivity {
             }
         };
 
+
+        static void UpdateLocation(Location location)
+        {
+            if (location!=null) {
+                String lat;
+                String longt;
+                String result;
+                lat = location.getLatitude() + "";
+                longt = location.getLongitude() + "";
+                if (lat.length() > 12) lat = lat.substring(0, 11);
+                if (longt.length() > 12) longt = longt.substring(0, 11);
+                result = lat +  ", " + longt;
+                tgps.setText(lat + ", \r" + longt);
+                Connect.myPG.gps = result;
+            }
+            else
+            {
+                tgps.setText("проверьте настройки GPS");
+            }
+        }
         /////////*******         Отправка данных на сервер           *********\\\\\\\\\\\\\
         class MyTask_reg extends AsyncTask<Void,Void,Void> {
 
@@ -286,7 +302,7 @@ public class InfoPage extends AppCompatActivity {
         }
          public static byte[] sending_reg_info()
          {
-             Log.d("На ервер","отправляю");
+             Log.d("На сервер","отправляю");
              int p = 0;
              if (Send_Message != Sendind.eNone) {
                  String params = "";
@@ -377,6 +393,24 @@ public class InfoPage extends AppCompatActivity {
              Send_Message = params;
          }
 
+    LocationManager mLocationManager;
+
+    private Location getLastKnownLocation() {
+        mLocationManager = (LocationManager)getApplicationContext().getSystemService(LOCATION_SERVICE);
+        List<String> providers = mLocationManager.getProviders(true);
+        Location bestLocation = null;
+        for (String provider : providers) {
+            Location l = mLocationManager.getLastKnownLocation(provider);
+            if (l == null) {
+                continue;
+            }
+            if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
+                // Found best last known location: %s", l);
+                bestLocation = l;
+            }
+        }
+        return bestLocation;
+    }
 
     //Ввод адреса сервера
     protected void enter_server(View view)
