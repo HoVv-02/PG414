@@ -36,4 +36,6 @@
     <string name="Device">"Прибор: "</string>
     <string name="Config_but">"Конфигурация"</string>
     <string name="Enter_server">"Введите адрес сервера"</string>
+    <string name="Archive">"Архив"</string>
+    <string name="Arch_Toast">"Количество неотправленных пакетов"</string>
 </resources>

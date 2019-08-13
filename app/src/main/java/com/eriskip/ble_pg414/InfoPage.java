@@ -1,14 +1,12 @@
 package com.eriskip.ble_pg414;
 
 import android.Manifest;
-import android.app.AlarmManager;
+
 import android.app.Notification;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.app.job.JobInfo;
-import android.app.job.JobScheduler;
-import android.content.ComponentName;
+
 import android.content.Context;
+
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -17,12 +15,9 @@ import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.location.LocationProvider;
+
 import android.os.AsyncTask;
-import android.os.Build;
-import android.os.PowerManager;
-import android.os.SystemClock;
-import android.renderscript.ScriptGroup;
+
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AlertDialog;
@@ -33,11 +28,17 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.NumberFormat;
@@ -50,21 +51,22 @@ import java.util.TimerTask;
 
 public class InfoPage extends AppCompatActivity {
 
-    public static String URL_reg = "/dev_add.php";
-    public static String URL_event = "/event_add.php";
-    private static final String TAG = "Connection PG414";
+    public static String URL_reg = "/dev_add.php";                      //файл который отвечает за добавления устройства - и как таковой проверки регистрации
+    public static String URL_event = "/event_add.php";                  //файл который отвечает за регстрацию события на сервере
+    private static final String TAG = "Connection PG414";               //таг для логера
+    private static final String FILE_NAME = "archive.dat";              //имя файла архива
  //   PowerManager pm;                                //Power Manager для управления питанием устройства
  //   PowerManager.WakeLock wakeLock;                 //конкретный объект который управляет отключение экрана и тп.
 
 
-    enum Sendind{eReg_info, eEvent, eNone}
+    enum Sendind{eReg_info, eEvent, eArchive, eNone}
 
     public static Sendind Send_Message = Sendind.eReg_info;                                               //переменная, которая отвечает за то какой сейчас пакет отправляется на сервер
 
     //>>>>>  UI ------------------------------------------------------------------------------------
-    public static TextView tconc1, tconc2, tconc3, tconc4, tzavod, gaz1, gaz2, gaz3, gaz4, tgps, tstatus,
-             charge, errcon;                                                                             //текстовые поля
-    ImageView disconnect;
+    public static TextView tconc1, tconc2, tconc3, tconc4, tzavod, gaz1, gaz2, gaz3, gaz4, tgps, tstatus, //текстовые поля
+             charge, errcon, arch_cnt;
+    ImageView disconnect, arch_alert;
     //----------------------------------------------------------------------------------------------
 
     public static TaskDynRead readDynParam;         //поток чтения параметров
@@ -73,12 +75,19 @@ public class InfoPage extends AppCompatActivity {
     public static LocationManager manager;                        //менеджер локаций для работы с GPS
     public static LocationManager managerNet;                     //менеджер локаций для работы с сервисами от гугл
 
+    public static boolean connect_device =  false;                //соединение с устройством
     public static boolean connect_server =  false;                //соединение с сервером
     public static boolean user_register =   true;                 //подошел ли пароль
     public static boolean has_be_register = false;                //было ли зарегистрированно устройство
 
+    public static int lines_archive = 0;                          //строк в архиве
+
+
+
+
 
     public int connToDev = 0;                      // попытки подключения
+    public File arch_file;                         // полный путь файла архива
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,6 +95,8 @@ public class InfoPage extends AppCompatActivity {
         setContentView(R.layout.activity_info_page);
         if (!Connect.offline && !Connect.hideMode)
         Connect.myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
+        Context context = getApplicationContext();
+
         else
             Connect.read_pause = true;
         //Ассоциаируем UI объекты
@@ -104,8 +115,10 @@ public class InfoPage extends AppCompatActivity {
 
         errcon = findViewById(R.id.err_con);
         charge = findViewById(R.id.percent);
+        arch_cnt = findViewById(R.id.arch_cnt);
 
-        disconnect = findViewById(R.id.disconnect);
+        arch_alert = findViewById(R.id.arch_alert);         //иконка алерт у архива
+        disconnect = findViewById(R.id.disconnect);         //картинка дисконнекта
 
         /************************Получаем параметры, введенные пользователем**********************/
         Connect.myPG.password    = MainActivity.Password;
@@ -128,8 +141,6 @@ public class InfoPage extends AppCompatActivity {
             return;
         }
 
-
-
         //Выводим описатели газа
         gaz1.setText(Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]); //  R.string.h2s)
         gaz2.setText(Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);  // R.string.co);
@@ -138,6 +149,22 @@ public class InfoPage extends AppCompatActivity {
 
         //Статус
         tstatus = findViewById(R.id.tstate);
+        arch_file = context.getFileStreamPath(FILE_NAME);
+
+        //Проверяем число неотправленных пакетов
+        read_cnt_lines();
+        if (lines_archive > 0)
+        {
+            //Делаем видимыми картинку
+            arch_cnt.setVisibility(View.VISIBLE);
+            arch_alert.setVisibility(View.VISIBLE);
+            arch_cnt.setText("" + lines_archive);
+        }
+        else
+        {
+            arch_cnt.setVisibility(View.INVISIBLE);
+            arch_alert.setVisibility(View.INVISIBLE);
+        }
 
         readDynParam = new TaskDynRead();
         send_asynk = new MyTask_reg();
@@ -150,7 +177,7 @@ public class InfoPage extends AppCompatActivity {
         //потоки
         if (!Connect.offline) {
             fon_val_refresh_start();
-            readDynParam.execute();
+            readDynParam.execute(); //TaskDynRead
             send_asynk.execute();
 
 
@@ -187,6 +214,8 @@ public class InfoPage extends AppCompatActivity {
     public void NullOut(View view){
     }
 
+    boolean cnt_con;           ///можно ли увеличивать счетсчик подключения и писать в файл
+
     /* Поток чтения динамических параметров */
     class TaskDynRead extends AsyncTask<Void, Void, Void> {
 
@@ -197,10 +226,14 @@ public class InfoPage extends AppCompatActivity {
 
                     if (isCancelled()) return null;
 
-                    sending_reg_info();
+                    sending_reg_info("");
                     //Если не пришла команда паузы чтения
                     if (!Connect.read_pause) {
-                        if (Connect.State_pack == Connect.RX_pack.COMPLETE )  connToDev = 0;
+                        if (Connect.State_pack == Connect.RX_pack.COMPLETE )
+                        {
+                            connToDev = 0;
+                            connect_device = true;
+                        }
                         Log.d("ПГ-414","Делаю запрос");
                         //Чтение статуса
                         Connect.myPG.reqDyn();
@@ -215,6 +248,7 @@ public class InfoPage extends AppCompatActivity {
                             Log.d("ПГ-414","Прочитал");
 
                         abort_counter = 0;
+                        cnt_con = true;
                     }
                 }
 
@@ -294,13 +328,26 @@ public class InfoPage extends AppCompatActivity {
             @Override
             protected Void doInBackground(Void... params) {
                 while (true) {
-                //    sending_reg_info();
-                    if (isCancelled()) return null;
+                    try {
+                        //Если есть подключение к серверу
+                        if (connect_server) {
+                            if (lines_archive > 0) {
+                                while (Send_Message != Sendind.eNone)
+                                    Thread.sleep(50);
+                                Send_Message = Sendind.eArchive;
+                                sending_reg_info("");
+                            }
+                            if (isCancelled()) return null;
+                        }
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
-
+                }
             }
         }
-         public static byte[] sending_reg_info()
+
+        //Функция отправки регистрационной информации. Отправляется 1 раз на сервер для авторизациии устройства в системе
+         public static byte[] sending_reg_info(String send_arch)
          {
              Log.d("На сервер","отправляю");
              int p = 0;
@@ -314,7 +361,6 @@ public class InfoPage extends AppCompatActivity {
                      if (Connect.myPG.status.length() < 5) {
                          Connect.myPG.status = "OK";
                      }
-
                      params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
                              + "&gps=" + Connect.myPG.gps + "&state=" + Connect.myPG.status
                              + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+ gaz1.getText().toString()   //(R.string.h2s)
@@ -323,7 +369,10 @@ public class InfoPage extends AppCompatActivity {
                              + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ gaz4.getText().toString()   //(R.string.ch4)
                              + "&field1="+ Connect.myPG.percent_charge                                                            //заряд
                              + "&key=1562";
-                 } else return null;
+                 } else if (Send_Message == Sendind.eArchive) {             //если ведется архиваня отправка данных
+                     params = send_arch;
+                 }
+                 else return null;
                  byte[] dataz = null;
                  InputStream is = null;
 
@@ -388,9 +437,9 @@ public class InfoPage extends AppCompatActivity {
 
 
 
-         public void send_message_to_server(Sendind params)
+         public void send_message_to_server(Sendind parametr)
          {
-             Send_Message = params;
+             Send_Message = parametr;
          }
 
     LocationManager mLocationManager;
@@ -455,6 +504,7 @@ public class InfoPage extends AppCompatActivity {
 
     public void UI_update()
     {
+            String params = "";
             if (!Connect.read_pause) {
                 NumberFormat nf[] = new NumberFormat[4];
                 for (byte j =0; j < 4; j++)
@@ -495,7 +545,7 @@ public class InfoPage extends AppCompatActivity {
                     if (!has_be_register)                               //В зависимости от того была ли регистрация
                         send_message_to_server(Sendind.eReg_info);      //Шлем регистрационные данные
                     else
-                        send_message_to_server(Sendind.eEvent);        //Шлем данные о событиях
+                        send_message_to_server(Sendind.eEvent);         //Шлем данные о событиях
                 }
                 cnt_sec++;
 
@@ -503,10 +553,23 @@ public class InfoPage extends AppCompatActivity {
                 if (connToDev > 222) connToDev = 8;
                 if (connToDev > 5)
                 {
+                    connect_device = false;
                     tstatus.setText(R.string.err_con_dev);
                     ShowMessageForDisconnect();
                     Connect.myPG.mBluetoothGatt.connect();
                 }
+
+                if (lines_archive > 0)
+                {
+                    arch_cnt.setVisibility(View.VISIBLE);
+                    arch_alert.setVisibility(View.VISIBLE);
+                    arch_cnt.setText(lines_archive+"");
+                } else
+                {
+                    arch_cnt.setVisibility(View.INVISIBLE);
+                    arch_alert.setVisibility(View.INVISIBLE);
+                }
+
             }
             else if (Connect.hideMode)
             {
@@ -515,9 +578,26 @@ public class InfoPage extends AppCompatActivity {
                     if (!has_be_register)                               //В зависимости от того была ли регистрация
                         send_message_to_server(Sendind.eReg_info);      //Шлем регистрационные данные
                     else
-                        send_message_to_server(Sendind.eEvent);        //Шлем данные о событиях
+                        send_message_to_server(Sendind.eEvent);         //Шлем данные о событиях
                 }
                 cnt_sec++;
+            }
+             String param = "";
+            if (cnt_con)
+            {
+            //Работа с файлами архива. В него пишем если нет соединения с сервером, но есть связь с ПГ. Эти данные регистрируем в отдельный файл
+             if (!connect_server && connect_device) {
+                    param = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
+                    + "&gps=" + Connect.myPG.gps + "&state=" + R.string.Archive + Connect.myPG.status
+                    + "&channel1=<b>" + tconc1.getText().toString() + "</b><br>" + gaz1.getText().toString()   //(R.string.h2s)
+                    + "&channel2=<b>" + tconc2.getText().toString() + "</b><br>" + gaz2.getText().toString()   //(R.string.co)
+                    + "&channel3=<b>" + tconc3.getText().toString() + "</b><br>" + gaz3.getText().toString()   //(R.string.o2)
+                    + "&channel4=<b>" + tconc4.getText().toString() + "</b><br>" + gaz4.getText().toString()   //(R.string.ch4)
+                    + "&field1=" + Connect.myPG.percent_charge                                                            //заряд
+                    + "&key=1562";
+                    write_to_file(param);      //пишем в файл и увеличиваем количество линий
+                  }
+                cnt_con = false;
             }
 
     }
@@ -540,6 +620,101 @@ public class InfoPage extends AppCompatActivity {
                 (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         notificationManager.notify(196, notification);
     }
+
+
+    //Запись данных в файл.
+    protected void write_to_file(String text)
+    {
+        try {
+            text += '\n';
+            FileOutputStream fos = null;
+            fos = openFileOutput(FILE_NAME, MODE_APPEND);
+            fos.write(text.getBytes());
+            lines_archive++;
+        }
+        catch(IOException ex) {
+            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    //Открываем файл и смотрим сколько там неотрпавленных пакетов
+    protected void read_cnt_lines()
+    {
+        try {
+            FileInputStream fin = openFileInput(FILE_NAME);
+            byte[] buffer = new byte[fin.available()];
+            // считаем файл в буфер
+            fin.read(buffer, 0, fin.available());
+            int linesCount = 0;
+            for(int i = 0; i < buffer.length;i++){
+                if (buffer[i] == '\n')
+                    linesCount++;
+            }
+            lines_archive = linesCount + 1;         //Число не отправленных пакетов после включения программы
+        }
+        catch(IOException ex) {
+            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_SHORT).show();
+            lines_archive = 0;
+        }
+    }
+
+    //Открываем файл, удаляем последнюю строку
+    protected String read_last_line()
+    {
+        String
+    }
+
+    //Чтение последней строки файла
+    private static String ReadLastLine(File file) throws FileNotFoundException, IOException {
+        String result = null;
+        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
+            long startIdx = file.length();
+            while (startIdx >= 0 && (result == null || result.length() == 0)) {
+                raf.seek(startIdx);
+                if (startIdx > 0)
+                    raf.readLine();
+                result = raf.readLine();
+                startIdx--;
+            }
+        }
+        return result;
+    }
+
+    //Очистка файла
+    protected void Clear_file(View view)
+    {
+        try {
+            String yyy = ReadLastLine(arch_file);
+            Toast.makeText(this, yyy, Toast.LENGTH_SHORT).show();
+            FileOutputStream fos = null;
+            fos = openFileOutput(FILE_NAME, MODE_PRIVATE);
+            fos.write(0);
+        }
+        catch(IOException ex) {
+            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_SHORT).show();
+            lines_archive = 0;
+        }
+    }
+
+    //Печать текстового дескриптора катринки
+    protected void PrintToast(View view)
+    {
+        Toast.makeText(this, view.getContentDescription(), Toast.LENGTH_SHORT).show();
+    }
+
+    ///
+    /*-Удалить последнюю строку
+    RandomAccessFile f = new RandomAccessFile(fileName, "rw");
+    long length = f.length() - 1;
+    do {
+     length -= 1;
+     f.seek(length);
+     byte b = f.readByte();
+    } while(b != 10);
+    f.setLength(length+1);
+    f.close();
+-*/
+    ///
 //-----------------------------------------------------------------------------------------------
 }
 

@@ -36,4 +36,6 @@
     <string name="Device">"Device: "</string>
     <string name="Config_but">"Configuration"</string>
     <string name="Enter_server">"Enter server address"</string>
+    <string name="Archive">"Archive"</string>
+    <string name="Arch_Toast">"Number of Unsent Packages"</string>
 </resources>
