@@ -38,4 +38,6 @@
     <string name="Enter_server">"Введите адрес сервера"</string>
     <string name="Archive">"Архив"</string>
     <string name="Arch_Toast">"Количество неотправленных пакетов"</string>
+    <string name="Sendnig_Arch">Отправка блока архива</string>
+    <string name="Message_powermanage">Для корректной работы приложения необходимо отключить оптимизацию энергии</string>
 </resources>

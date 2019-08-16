@@ -3,8 +3,15 @@ package com.eriskip.ble_pg414;
 
 
 
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.AsyncTask;
+import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
+import android.support.annotation.RequiresApi;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -31,6 +38,7 @@ public class MainActivity extends AppCompatActivity {
 
     //>>>>> Настройки     -------------------------------------------------------------------
     static public SharedPreferences mSettings;
+    static public SharedPreferences.Editor editor;
     public static String FILE_SETTINGS        =  "configs";
     public static String LOGIN_SETTINGS       =    "login";   public static String  Login       = "";
     public static String PASSWORD_SETTINGS     ="password";   public static String  Password    = "";
@@ -50,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -60,7 +69,6 @@ public class MainActivity extends AppCompatActivity {
         ePassword = findViewById(R.id.ePassword);
         eDescript = findViewById(R.id.eDescript);
 
-        mSettings = getPreferences(Context.MODE_PRIVATE);
         // Получаем логин из настроек
         Login = mSettings.getString(LOGIN_SETTINGS,"");
         // Получаем пароль из настроек
@@ -77,6 +85,14 @@ public class MainActivity extends AppCompatActivity {
         eLogin.setText(Login);
         ePassword.setText(Password);
         eDescript.setText(Description);
+
+        String packageName = getPackageName();
+        final PowerManager pm =  (PowerManager) getApplicationContext().getSystemService(Context.POWER_SERVICE);
+        if (!pm.isIgnoringBatteryOptimizations(packageName))
+        {
+            Set_Battery();  //запускаем диалог необходимости выключения режима энергосбережения
+        }
+
 
 ////TMP   //Временная строка для того чтобы переключиться на сразу форму подключения
 //        Intent intent = new Intent(this, Connect.class);
@@ -95,7 +111,7 @@ public class MainActivity extends AppCompatActivity {
         startActivityForResult(intent, CHOOSE_THIEF);
 
         // Запоминаем данные
-        SharedPreferences.Editor editor = mSettings.edit();
+        editor = mSettings.edit();
         editor.putString(LOGIN_SETTINGS, Login);
         editor.putString(PASSWORD_SETTINGS, Password);
         editor.putString(DESCRIPT_SETTINGS, Description);
@@ -103,6 +119,30 @@ public class MainActivity extends AppCompatActivity {
         editor.putBoolean(WC_SETTINGS, bConnect);
 
         editor.commit();
+    }
+
+    //Функция выводи сообщение о необходимости отключения энергосбережения
+    private void Set_Battery()
+    {
+        AlertDialog.Builder alert = new AlertDialog.Builder(this, R.style.AlertDialogCustom);
+
+        alert.setTitle(getString(R.string.info));
+        alert.setMessage(getString(R.string.Message_powermanage));
+        alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int whichButton) {
+                Intent enableIntent;
+                enableIntent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                startActivity(enableIntent);
+            }
+        });
+
+        alert.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int whichButton) {
+                // Canceled.
+            }
+        });
+
+        alert.show();
     }
 
     @Override

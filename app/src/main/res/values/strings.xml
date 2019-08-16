@@ -38,4 +38,6 @@
     <string name="Enter_server">"Enter server address"</string>
     <string name="Archive">"Archive"</string>
     <string name="Arch_Toast">"Number of Unsent Packages"</string>
+    <string name="Sendnig_Arch">Sending archive block</string>
+    <string name="Message_powermanage">For the application to work correctly, you must turn off energy optimization</string>
 </resources>

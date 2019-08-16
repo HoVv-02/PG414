@@ -94,11 +94,10 @@ public class InfoPage extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_info_page);
         if (!Connect.offline && !Connect.hideMode)
-        Connect.myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
-        Context context = getApplicationContext();
-
+             Connect.myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
         else
             Connect.read_pause = true;
+        Context context = getApplicationContext();
         //Ассоциаируем UI объекты
         tconc1 = findViewById(R.id.tconc1);
         tconc2 = findViewById(R.id.tconc2);
@@ -214,7 +213,8 @@ public class InfoPage extends AppCompatActivity {
     public void NullOut(View view){
     }
 
-    boolean cnt_con;           ///можно ли увеличивать счетсчик подключения и писать в файл
+    boolean cnt_con;           //можно ли увеличивать счетсчик подключения и писать в файл
+    boolean sending_archive;   //идет отправка архива
 
     /* Поток чтения динамических параметров */
     class TaskDynRead extends AsyncTask<Void, Void, Void> {
@@ -249,6 +249,22 @@ public class InfoPage extends AppCompatActivity {
 
                         abort_counter = 0;
                         cnt_con = true;
+
+                        try {
+                            //Если есть подключение к серверу
+                            if (connect_server) {
+                                while (lines_archive > 0 && connect_server) {
+                                    sending_archive = true;
+                                    Thread.sleep(60);
+                                    Send_Message = Sendind.eArchive;
+                                    sending_reg_info(ReadLastLine(arch_file));      //отправляем на сервер и удалаям строку из файла
+                                    lines_archive--;
+                                }
+                                sending_archive = false;
+                            }
+                        } catch (IOException | InterruptedException e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
 
@@ -328,20 +344,7 @@ public class InfoPage extends AppCompatActivity {
             @Override
             protected Void doInBackground(Void... params) {
                 while (true) {
-                    try {
-                        //Если есть подключение к серверу
-                        if (connect_server) {
-                            if (lines_archive > 0) {
-                                while (Send_Message != Sendind.eNone)
-                                    Thread.sleep(50);
-                                Send_Message = Sendind.eArchive;
-                                sending_reg_info("");
-                            }
-                            if (isCancelled()) return null;
-                        }
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+
                 }
             }
         }
@@ -425,10 +428,16 @@ public class InfoPage extends AppCompatActivity {
                      }
                  }
                  Send_Message = Sendind.eNone;
-                 if (connect_server && dataz[1] == 'n' && dataz[2] == 'o')
+                 if (dataz != null)
+                 {
+                   if (dataz.length > 3)
+                    if (connect_server && dataz[1] == 'n' && dataz[2] == 'o')
                      user_register = false;
-                 else
+                     else
                      user_register = true;
+                 }
+                 else
+                     connect_server = false;
                  return dataz;
              }
              return null;
@@ -460,39 +469,44 @@ public class InfoPage extends AppCompatActivity {
         }
         return bestLocation;
     }
-
     //Ввод адреса сервера
     protected void enter_server(View view)
     {
-        AlertDialog.Builder alert = new AlertDialog.Builder(InfoPage.this, R.style.AlertDialogCustom);
+        try {
+            AlertDialog.Builder alert = new AlertDialog.Builder(InfoPage.this, R.style.AlertDialogCustom);
 
-        alert.setTitle(getString(R.string.Config_but));
-        alert.setMessage(getString(R.string.Enter_server));
+            alert.setTitle(getString(R.string.Config_but));
+            alert.setMessage(getString(R.string.Enter_server));
 
-        // Set an EditText view to get user input
-        final EditText input = new EditText(InfoPage.this);
-        input.setText(MainActivity.Server);
-        input.setTextColor(Color.rgb(232, 228, 211));
-        alert.setView(input);
+            // Set an EditText view to get user input
+            final EditText input = new EditText(InfoPage.this);
+            input.setText(MainActivity.Server);
+            input.setTextColor(Color.rgb(232, 228, 211));
+            alert.setView(input);
 
-        alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int whichButton) {
-                String resulty = input.getText().toString();
-                //
-                MainActivity.Server = resulty;
-                SharedPreferences.Editor editor = MainActivity.mSettings.edit();
-                editor.putString(MainActivity.SERVER_SETTING,  resulty);
-                editor.commit();
-            }
-        });
 
-        alert.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int whichButton) {
-                // Canceled.
-            }
-        });
+            alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int whichButton) {
+                    String resulty = input.getText().toString();
+                    //Заполняем поле
+                    MainActivity.Server = resulty;
+                    MainActivity.editor.putString(MainActivity.SERVER_SETTING, resulty);
+                    MainActivity.editor.commit();
+                }
+            });
 
-        alert.show();
+            alert.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int whichButton) {
+                    // Canceled.
+                }
+            });
+
+            alert.show();
+        }
+        catch (Exception ex)
+        {
+            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     //*******************TEST ZONE***************************
@@ -551,7 +565,7 @@ public class InfoPage extends AppCompatActivity {
 
                 connToDev++;
                 if (connToDev > 222) connToDev = 8;
-                if (connToDev > 5)
+                if (connToDev > 5 && !sending_archive)
                 {
                     connect_device = false;
                     tstatus.setText(R.string.err_con_dev);
@@ -564,6 +578,8 @@ public class InfoPage extends AppCompatActivity {
                     arch_cnt.setVisibility(View.VISIBLE);
                     arch_alert.setVisibility(View.VISIBLE);
                     arch_cnt.setText(lines_archive+"");
+                    if (sending_archive)
+                        tstatus.setText(R.string.Sendnig_Arch);
                 } else
                 {
                     arch_cnt.setVisibility(View.INVISIBLE);
@@ -588,7 +604,7 @@ public class InfoPage extends AppCompatActivity {
             //Работа с файлами архива. В него пишем если нет соединения с сервером, но есть связь с ПГ. Эти данные регистрируем в отдельный файл
              if (!connect_server && connect_device) {
                     param = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
-                    + "&gps=" + Connect.myPG.gps + "&state=" + R.string.Archive + Connect.myPG.status
+                    + "&gps=" + Connect.myPG.gps + "&state=" + "Archive: " + Connect.myPG.status
                     + "&channel1=<b>" + tconc1.getText().toString() + "</b><br>" + gaz1.getText().toString()   //(R.string.h2s)
                     + "&channel2=<b>" + tconc2.getText().toString() + "</b><br>" + gaz2.getText().toString()   //(R.string.co)
                     + "&channel3=<b>" + tconc3.getText().toString() + "</b><br>" + gaz3.getText().toString()   //(R.string.o2)
@@ -637,6 +653,8 @@ public class InfoPage extends AppCompatActivity {
         }
     }
 
+
+
     //Открываем файл и смотрим сколько там неотрпавленных пакетов
     protected void read_cnt_lines()
     {
@@ -658,16 +676,10 @@ public class InfoPage extends AppCompatActivity {
         }
     }
 
-    //Открываем файл, удаляем последнюю строку
-    protected String read_last_line()
-    {
-        String
-    }
-
-    //Чтение последней строки файла
+    //Чтение последней строки файла. А затем ее удаление
     private static String ReadLastLine(File file) throws FileNotFoundException, IOException {
         String result = null;
-        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
+        try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
             long startIdx = file.length();
             while (startIdx >= 0 && (result == null || result.length() == 0)) {
                 raf.seek(startIdx);
@@ -676,16 +688,22 @@ public class InfoPage extends AppCompatActivity {
                 result = raf.readLine();
                 startIdx--;
             }
+            raf.setLength(file.length() - result.length());
         }
         return result;
     }
 
+    //Задать размер файлу
+    private  static void SetLen(int size)
+    {
+
+    }
+
+
     //Очистка файла
     protected void Clear_file(View view)
     {
-        try {
-            String yyy = ReadLastLine(arch_file);
-            Toast.makeText(this, yyy, Toast.LENGTH_SHORT).show();
+     try {
             FileOutputStream fos = null;
             fos = openFileOutput(FILE_NAME, MODE_PRIVATE);
             fos.write(0);
@@ -694,6 +712,7 @@ public class InfoPage extends AppCompatActivity {
             Toast.makeText(this, ex.getMessage(), Toast.LENGTH_SHORT).show();
             lines_archive = 0;
         }
+
     }
 
     //Печать текстового дескриптора катринки
@@ -701,19 +720,6 @@ public class InfoPage extends AppCompatActivity {
     {
         Toast.makeText(this, view.getContentDescription(), Toast.LENGTH_SHORT).show();
     }
-
-    ///
-    /*-Удалить последнюю строку
-    RandomAccessFile f = new RandomAccessFile(fileName, "rw");
-    long length = f.length() - 1;
-    do {
-     length -= 1;
-     f.seek(length);
-     byte b = f.readByte();
-    } while(b != 10);
-    f.setLength(length+1);
-    f.close();
--*/
     ///
 //-----------------------------------------------------------------------------------------------
 }

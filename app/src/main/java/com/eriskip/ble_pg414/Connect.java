@@ -129,6 +129,7 @@ public class Connect extends AppCompatActivity {
                 startScanning();
             }
         });
+
         //кнопка остановить сканирование
         stopScanningButton =  findViewById(R.id.ble_stop);
         stopScanningButton.setOnClickListener(new View.OnClickListener() {
@@ -138,7 +139,6 @@ public class Connect extends AppCompatActivity {
             }
         });
         stopScanningButton.setVisibility(View.INVISIBLE);
-
 
         //Список найденных устройств
         deviceList =  findViewById(R.id.list_devices);
