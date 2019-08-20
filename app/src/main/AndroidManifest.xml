@@ -2,13 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.eriskip.ble_pg414">
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    <!-- - Добавляем разрешение на использование блютуз, GPS -->
+    <uses-permission android:name="android.permission.INTERNET" /> <!-- - Добавляем разрешение на использование блютуз, GPS -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.WAKE_LOCK"></uses-permission>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-feature android:name="android.hardware.location.gps" />
     <uses-feature android:name="android.hardware.location.network" />
@@ -20,12 +19,15 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <receiver android:process=":remote" android:name=".Alarm"></receiver>
         <service
-            android:name=".PG_Service"
+            android:name=".GPS_service"
             android:enabled="true"
-            android:process=":your_service" >
-        </service>
+            android:exported="true"></service>
+
+        <receiver
+            android:name=".Alarm"
+            android:process=":remote" />
+
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -33,13 +35,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".Connect"
-            android:screenOrientation="portrait"/>
-        <activity android:name=".InfoPage"
-            android:screenOrientation="portrait"
-            ></activity>
-
+        <activity
+            android:name=".Connect"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".InfoPage"
+            android:screenOrientation="portrait" />
     </application>
-
 
 </manifest>

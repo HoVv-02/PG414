@@ -5,10 +5,12 @@ import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationManager;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
 
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -18,6 +20,7 @@ import android.location.LocationManager;
 
 import android.os.AsyncTask;
 
+import android.os.Build;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AlertDialog;
@@ -58,6 +61,8 @@ public class InfoPage extends AppCompatActivity {
  //   PowerManager pm;                                //Power Manager для управления питанием устройства
  //   PowerManager.WakeLock wakeLock;                 //конкретный объект который управляет отключение экрана и тп.
 
+    public final static String BROADCAST_ACTION = "com.eriskip.ble_pg414";
+    BroadcastReceiver br;   //слушатель параметров геолокациии от нашего сервиса
 
     enum Sendind{eReg_info, eEvent, eArchive, eNone}
 
@@ -72,8 +77,8 @@ public class InfoPage extends AppCompatActivity {
     public static TaskDynRead readDynParam;         //поток чтения параметров
     public   MyTask_reg send_asynk;                 //поток отправки сообщений
 
-    public static LocationManager manager;                        //менеджер локаций для работы с GPS
-    public static LocationManager managerNet;                     //менеджер локаций для работы с сервисами от гугл
+  //  public static LocationManager manager;                        //менеджер локаций для работы с GPS
+  //  public static LocationManager managerNet;                     //менеджер локаций для работы с сервисами от гугл
 
     public static boolean connect_device =  false;                //соединение с устройством
     public static boolean connect_server =  false;                //соединение с сервером
@@ -81,13 +86,20 @@ public class InfoPage extends AppCompatActivity {
     public static boolean has_be_register = false;                //было ли зарегистрированно устройство
 
     public static int lines_archive = 0;                          //строк в архиве
-
-
+    public final static String PARAM_TASK = "task";
+    public static String param_lat_lon = "none";                                     //координаты полученные от сервиса - Широта
 
 
 
     public int connToDev = 0;                      // попытки подключения
     public File arch_file;                         // полный путь файла архива
+
+    @Override
+    protected void onDestroy()
+    {
+        super.onDestroy();
+        stopService(new Intent(this, GPS_service.class));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,11 +141,21 @@ public class InfoPage extends AppCompatActivity {
         //Отправка на сервер
         send_message_to_server(Sendind.eReg_info);
 
-
         //GPS
         tgps = findViewById(R.id.tgps);
-        manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        managerNet = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
+        //Класс для приема сообщения из потока сервиса
+        br = new BroadcastReceiver() {
+            // действия при получении сообщений
+            public void onReceive(Context context, Intent intent) {
+                param_lat_lon = intent.getStringExtra(PARAM_TASK);
+
+            }
+        };
+        // создаем фильтр для BroadcastReceiver
+        IntentFilter intFilt = new IntentFilter(BROADCAST_ACTION);
+        // регистрируем (включаем) BroadcastReceiver
+        registerReceiver(br, intFilt);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             tgps.setText("Запрет на геолокацию");
@@ -168,14 +190,21 @@ public class InfoPage extends AppCompatActivity {
         readDynParam = new TaskDynRead();
         send_asynk = new MyTask_reg();
 
-        startService(new Intent(this, PG_Service.class));
+
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+              startForegroundService(new Intent(this, GPS_service.class));
+          }
+          else
+          {
+            startService(new Intent(this, GPS_service.class));
+          }
         //Обновляем GPS
-        Location lastKnownLocation = getLastKnownLocation();
-        UpdateLocation(lastKnownLocation);
+
         //----------------------------------
         //потоки
+        fon_val_refresh_start();
         if (!Connect.offline) {
-            fon_val_refresh_start();
+
             readDynParam.execute(); //TaskDynRead
             send_asynk.execute();
 
@@ -185,9 +214,9 @@ public class InfoPage extends AppCompatActivity {
 
     public static void runGPS()
     {
-        manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 2, listener);
-        if (managerNet.getProvider(LocationManager.NETWORK_PROVIDER) != null)
-        managerNet.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 2, listener);
+   //     manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 2, listener);
+   //     if (managerNet.getProvider(LocationManager.NETWORK_PROVIDER) != null)
+   //     managerNet.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 2, listener);
     }
 
     @Override
@@ -301,43 +330,7 @@ public class InfoPage extends AppCompatActivity {
         }
 
 
-        /**---------------------------------------------------------------*GPS*--------------------------------------------------------------**/
-        private static  LocationListener listener = new LocationListener() {
-            @Override
-            public void onLocationChanged(Location location) {
-                UpdateLocation(location);
-            }
-            @Override
-            public void onStatusChanged(String provider, int status, Bundle extras) {
-            }
-            @Override
-            public void onProviderEnabled(String provider) {
-            }
-            @Override
-            public void onProviderDisabled(String provider) {
-            }
-        };
 
-
-        static void UpdateLocation(Location location)
-        {
-            if (location!=null) {
-                String lat;
-                String longt;
-                String result;
-                lat = location.getLatitude() + "";
-                longt = location.getLongitude() + "";
-                if (lat.length() > 12) lat = lat.substring(0, 11);
-                if (longt.length() > 12) longt = longt.substring(0, 11);
-                result = lat +  ", " + longt;
-                tgps.setText(lat + ", \r" + longt);
-                Connect.myPG.gps = result;
-            }
-            else
-            {
-                tgps.setText("проверьте настройки GPS");
-            }
-        }
         /////////*******         Отправка данных на сервер           *********\\\\\\\\\\\\\
         class MyTask_reg extends AsyncTask<Void,Void,Void> {
 
@@ -450,7 +443,7 @@ public class InfoPage extends AppCompatActivity {
          {
              Send_Message = parametr;
          }
-
+/*
     LocationManager mLocationManager;
 
     private Location getLastKnownLocation() {
@@ -469,6 +462,7 @@ public class InfoPage extends AppCompatActivity {
         }
         return bestLocation;
     }
+    */
     //Ввод адреса сервера
     protected void enter_server(View view)
     {
@@ -520,6 +514,8 @@ public class InfoPage extends AppCompatActivity {
     {
             String params = "";
             if (!Connect.read_pause) {
+
+                //Применяем дискретность газов
                 NumberFormat nf[] = new NumberFormat[4];
                 for (byte j =0; j < 4; j++)
                 {
@@ -533,17 +529,17 @@ public class InfoPage extends AppCompatActivity {
                 tconc2.setText(nf[1].format(Connect.myPG.conc2/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[1]*(-1)])));
                 tconc3.setText(nf[2].format(Connect.myPG.conc3/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[2]*(-1)])));
                 tconc4.setText(nf[3].format(Connect.myPG.conc4/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[3]*(-1)])));
-
+                //Процент заряда батареи
                 charge.setText(getResources().getString(R.string.Charge) + Connect.myPG.percent_charge + "%");
-
+                //Статус
                 tstatus.setText(Connect.myPG.Make_State());
                 if (!user_register && connect_server)
                 {
-                    errcon.setText(R.string.un_logi);
+                    errcon.setText(R.string.un_logi);            //если пользователь не зарегистрированный , то выводим ошибку авторизации
                     errcon.setVisibility(View.VISIBLE);
                 }
                 else
-                if (!connect_server) {
+                if (!connect_server) {                                 //Если подключен к серверу
                     errcon.setText(R.string.Server_aerror);
                     errcon.setVisibility(View.VISIBLE);
                     disconnect.setVisibility(View.VISIBLE);
@@ -563,9 +559,9 @@ public class InfoPage extends AppCompatActivity {
                 }
                 cnt_sec++;
 
-                connToDev++;
+                connToDev++;                                            //увеличиываем счетчик попыток подключения. он сбрасывается при успешном чтении
                 if (connToDev > 222) connToDev = 8;
-                if (connToDev > 5 && !sending_archive)
+                if (connToDev > 5 && !sending_archive)                  //если попыток было 5 а информации от ПГ-414 не поступала выводим сообщение и запускаем переподключение
                 {
                     connect_device = false;
                     tstatus.setText(R.string.err_con_dev);
@@ -573,7 +569,7 @@ public class InfoPage extends AppCompatActivity {
                     Connect.myPG.mBluetoothGatt.connect();
                 }
 
-                if (lines_archive > 0)
+                if (lines_archive > 0)                                   //если есть записи в архиве, то выводим их количество на экран
                 {
                     arch_cnt.setVisibility(View.VISIBLE);
                     arch_alert.setVisibility(View.VISIBLE);
@@ -599,6 +595,11 @@ public class InfoPage extends AppCompatActivity {
                 cnt_sec++;
             }
              String param = "";
+
+            /*Обновляем информацию по GPS*/
+            tgps.setText(param_lat_lon);
+             Connect.myPG.gps = param_lat_lon;
+
             if (cnt_con)
             {
             //Работа с файлами архива. В него пишем если нет соединения с сервером, но есть связь с ПГ. Эти данные регистрируем в отдельный файл

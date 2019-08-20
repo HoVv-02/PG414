@@ -17,6 +17,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
@@ -504,7 +505,11 @@ public class Connect extends AppCompatActivity {
             }
             else
             {
-                Connect.myPG.zavod_number = 999000;
+                String androidID = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);     //получаем псевдоуникальный идентификатор
+                if (androidID.length() > 8)
+                    Connect.myPG.zavod_number = Long.parseLong(androidID.substring(0, 8), 16);                //получаем число с учетом системы счисления
+                else
+                    Connect.myPG.zavod_number = 999000;
                 Connect.myPG.status = "ОК";
             }
 
