@@ -40,4 +40,6 @@
     <string name="Arch_Toast">"Number of Unsent Packages"</string>
     <string name="Sendnig_Arch">Sending archive block</string>
     <string name="Message_powermanage">For the application to work correctly, you must turn off energy optimization</string>
+    <string name="Geo_work">Determination of geolocation</string>
+    <string name="Geo_work_text">The geolocation in the background</string>
 </resources>

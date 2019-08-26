@@ -40,4 +40,6 @@
     <string name="Arch_Toast">"Количество неотправленных пакетов"</string>
     <string name="Sendnig_Arch">Отправка блока архива</string>
     <string name="Message_powermanage">Для корректной работы приложения необходимо отключить оптимизацию энергии</string>
+    <string name="Geo_work">Работа с геолокацией</string>
+    <string name="Geo_work_text">Ведется фоновое определение геолокации</string>
 </resources>

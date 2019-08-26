@@ -6,9 +6,14 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.icu.text.IDNA;
+import android.location.Criteria;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Bundle;
 import android.os.IBinder;
+import android.provider.Settings;
+import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
@@ -21,103 +26,81 @@ public class GPS_service extends Service {
     public GPS_service() {
     }
 
-    public static String value;   //данные которые будем каждый раз передавать в приложение
+    private LocationListener listener;
+    private LocationManager locationManager;
+    private Criteria criteria;
+    private String provider;
 
-    LocationManager mLocationManager;
-    Location tLocation;
-    String lat;
-    String longt;
-
-    private Location getLastKnownLocation() {
-        mLocationManager = (LocationManager)getApplicationContext().getSystemService(LOCATION_SERVICE);
-        List<String> providers = mLocationManager.getProviders(true);
-        Location bestLocation = null;
-        for (String provider : providers) {
-            Location l = mLocationManager.getLastKnownLocation(provider);
-            if (l == null) {
-                continue;
-            }
-            if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
-                // Found best last known location: %s", l);
-                bestLocation = l;
-            }
-        }
-        return bestLocation;
-    }
-
-
-
+    @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        // TODO: Return the communication channel to the service.
-        throw new UnsupportedOperationException("Not yet implemented");
+        return null;
     }
-
-    final String LOG_TAG = "myLogs";
-
-    ExecutorService es;                                          //разделитель потоков
 
     public void onCreate() {
-        super.onCreate();
-        Log.d(LOG_TAG, "GPS_service onCreate");
-        es = Executors.newFixedThreadPool(1);           //число потоков
+        //слушатель - он будет ждать когда изменятся координаты и отправит их пользователю
+        listener = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+                Intent broadcastIntent = new Intent(InfoPage.BROADCAST_ACTION);                     //интент для широковещательной передачи данных из сервиса в форму активити
+                String lat;                                                                         //широта
+                String longt;                                                                       //долгота
+                lat = location.getLatitude() + "";
+                longt = location.getLongitude() + "";
+                if (lat.length() > 12) lat = lat.substring(0, 11);                                  //регулируем длинну полученных координат
+                if (longt.length() > 12) longt = longt.substring(0, 11);                            //регулируем длинну полученных координат
+                broadcastIntent.putExtra(InfoPage.PARAM_TASK,lat+", "+ longt);                //формируем данные для отправки в активити
+                sendBroadcast(broadcastIntent);                                                     //отправляем
+            }
+
+            @Override
+            public void onStatusChanged(String s, int i, Bundle bundle) {
+
+            }
+
+            @Override
+            public void onProviderEnabled(String s) {
+
+            }
+
+            @Override
+            public void onProviderDisabled(String s) {
+                provider = locationManager.getBestProvider(criteria, true);                     //если провайдер не достпуен, пробуем получить другой
+                locationManager.requestLocationUpdates(provider,5000,0,listener);
+            }
+        };
+        criteria = new Criteria();
+        criteria.setAccuracy(Criteria.ACCURACY_FINE);                                                               //определяем по какому критерию будет выбираться лучший провайдер
+        locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
+        //noinspection MissingPermission
+        provider = locationManager.getBestProvider(criteria, true);
+        locationManager.requestLocationUpdates(provider,5000,0,listener);
     }
 
-    public void onDestroy() {
-        super.onDestroy();
-        Log.d(LOG_TAG, "GPS_service onDestroy");
-    }
-
+    //При старте, согласно тербованиям API Android v 8.0+ необходимо оповестить пользователя о работе
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(LOG_TAG, "GPS_service onStartCommand");
+        Log.d("ssServiceGPS", "GPS_service onStartCommand");
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
                 .setSmallIcon(R.drawable.bluetooth)
-                .setContentTitle("Работа с геолокацией")
-                .setContentText("Ведется фоновое определение геолокации")
+                .setContentTitle(getString(R.string.Geo_work))                          //заголовок
+                .setContentText(getString(R.string.Geo_work_text))                      //текст уведомления
                 .setAutoCancel(true)
                 .setPriority(Notification.PRIORITY_MAX);
 
         Notification notification = builder.build();
 
-        this.startForeground(196, notification);            //показываем сообщение
-        MyRun mr = new MyRun();
-        es.execute(mr);                                         //запускаем в потоке
+        this.startForeground(196, notification);             //показываем сообщение
+                                                                 //запускаем в потоке
         return super.onStartCommand(intent, flags, startId);
     }
 
-    //Поток для опроса GPS
-    class MyRun implements Runnable {
-
-        public MyRun() {
-            Log.d(LOG_TAG, "MyRun create");
-        }
-
-
-        public void run() {
-            Intent intent = new Intent(InfoPage.BROADCAST_ACTION);
-            Log.d(LOG_TAG, "MyRun started");
-            try {
-
-                while(true) {
-                    tLocation = getLastKnownLocation();
-                    lat = tLocation.getLatitude() + "";
-                    longt = tLocation.getLongitude() + "";
-                    if (lat.length() > 12) lat = lat.substring(0, 11);
-                    if (longt.length() > 12) longt = longt.substring(0, 11);
-                    value = lat +", "+ longt;
-                    // сообщаем о старте задачи
-                    intent.putExtra(InfoPage.PARAM_TASK, value);
-                    sendBroadcast(intent);
-                    Thread.sleep(5000);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            stop();
-        }
-
-        void stop() {
-            Log.d(LOG_TAG, "MyRun#  stopSelfResult");
+    public void onDestroy() {
+        super.onDestroy();
+        if(locationManager != null){
+            //noinspection MissingPermission
+            locationManager.removeUpdates(listener);
         }
     }
+
+
 }

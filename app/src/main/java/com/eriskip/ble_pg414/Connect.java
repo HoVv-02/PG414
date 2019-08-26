@@ -633,7 +633,7 @@ public class Connect extends AppCompatActivity {
                             State_pack = RX_pack.READPARAM;
                             Thread.sleep(delay_module);
                             myPG.startRead();
-                            Thread.sleep(300);
+                            Thread.sleep(500);
                             if (breaker) return null;
                         } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
                     publishProgress();
@@ -644,7 +644,7 @@ public class Connect extends AppCompatActivity {
                         State_pack = RX_pack.READPARAM;
                         Thread.sleep(delay_module);
                         myPG.startRead();
-                        Thread.sleep(300);
+                        Thread.sleep(500);
                         if (breaker) return null;
                     } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
                 }

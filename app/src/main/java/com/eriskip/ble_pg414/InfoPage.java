@@ -101,6 +101,25 @@ public class InfoPage extends AppCompatActivity {
         stopService(new Intent(this, GPS_service.class));
     }
 
+    LocationManager mLocationManager;
+
+    private Location getLastKnownLocation() {
+        mLocationManager = (LocationManager)getApplicationContext().getSystemService(LOCATION_SERVICE);
+        List<String> providers = mLocationManager.getProviders(true);
+        Location bestLocation = null;
+        for (String provider : providers) {
+            Location l = mLocationManager.getLastKnownLocation(provider);
+            if (l == null) {
+                continue;
+            }
+            if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
+                // Found best last known location: %s", l);
+                bestLocation = l;
+            }
+        }
+        return bestLocation;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -199,7 +218,8 @@ public class InfoPage extends AppCompatActivity {
             startService(new Intent(this, GPS_service.class));
           }
         //Обновляем GPS
-
+        Location lastKnownLocation = getLastKnownLocation();
+        UpdateLocation(lastKnownLocation);
         //----------------------------------
         //потоки
         fon_val_refresh_start();
@@ -211,12 +231,25 @@ public class InfoPage extends AppCompatActivity {
 
         }
     }
-
-    public static void runGPS()
+    //Обновление параметров GPS
+    static void UpdateLocation(Location location)
     {
-   //     manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 2, listener);
-   //     if (managerNet.getProvider(LocationManager.NETWORK_PROVIDER) != null)
-   //     managerNet.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 2, listener);
+        if (location!=null) {
+            String lat;
+            String longt;
+            String result;
+            lat = location.getLatitude() + "";
+            longt = location.getLongitude() + "";
+            if (lat.length() > 12) lat = lat.substring(0, 11);
+            if (longt.length() > 12) longt = longt.substring(0, 11);
+            result = lat +  ", " + longt;
+            tgps.setText(lat + ", \r" + longt);
+            Connect.myPG.gps = result;
+        }
+        else
+        {
+            tgps.setText("проверьте настройки GPS");
+        }
     }
 
     @Override
@@ -224,7 +257,6 @@ public class InfoPage extends AppCompatActivity {
     {
         //При восстановлении работы вновь запускаем GPS & NEY провайдеров для определения координат
         super.onResume();
-        runGPS();
         Log.d("ON RESUME RUN", "Я проснулся");
     }
 
@@ -234,7 +266,6 @@ public class InfoPage extends AppCompatActivity {
         Log.d("ON PAUSE RUN", "Я пошел спать");
         //При остановке отключаем GPS позиционирование
         super.onPause();
-      //  manager.removeUpdates(listener);
 
     }
 
@@ -443,30 +474,11 @@ public class InfoPage extends AppCompatActivity {
          {
              Send_Message = parametr;
          }
-/*
-    LocationManager mLocationManager;
 
-    private Location getLastKnownLocation() {
-        mLocationManager = (LocationManager)getApplicationContext().getSystemService(LOCATION_SERVICE);
-        List<String> providers = mLocationManager.getProviders(true);
-        Location bestLocation = null;
-        for (String provider : providers) {
-            Location l = mLocationManager.getLastKnownLocation(provider);
-            if (l == null) {
-                continue;
-            }
-            if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
-                // Found best last known location: %s", l);
-                bestLocation = l;
-            }
-        }
-        return bestLocation;
-    }
-    */
     //Ввод адреса сервера
-    protected void enter_server(View view)
+    public  void enter_server(View v)
     {
-        try {
+    try {
             AlertDialog.Builder alert = new AlertDialog.Builder(InfoPage.this, R.style.AlertDialogCustom);
 
             alert.setTitle(getString(R.string.Config_but));
@@ -481,7 +493,7 @@ public class InfoPage extends AppCompatActivity {
 
             alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface dialog, int whichButton) {
-                    String resulty = input.getText().toString();
+                    String resulty = ""; //= input.getText().toString();
                     //Заполняем поле
                     MainActivity.Server = resulty;
                     MainActivity.editor.putString(MainActivity.SERVER_SETTING, resulty);
@@ -496,6 +508,7 @@ public class InfoPage extends AppCompatActivity {
             });
 
             alert.show();
+
         }
         catch (Exception ex)
         {
@@ -560,11 +573,11 @@ public class InfoPage extends AppCompatActivity {
                 cnt_sec++;
 
                 connToDev++;                                            //увеличиываем счетчик попыток подключения. он сбрасывается при успешном чтении
-                if (connToDev > 222) connToDev = 8;
-                if (connToDev > 5 && !sending_archive)                  //если попыток было 5 а информации от ПГ-414 не поступала выводим сообщение и запускаем переподключение
+                if (connToDev > 222) connToDev = 11;
+                if (connToDev > 10 && !sending_archive)                  //если попыток было 5 а информации от ПГ-414 не поступала выводим сообщение и запускаем переподключение
                 {
                     connect_device = false;
-                    tstatus.setText(R.string.err_con_dev);
+                  //  tstatus.setText(R.string.err_con_dev);            //КОСТЫЛЬ. на планшетах почему то постоянно пишет хоть связь и есть
                     ShowMessageForDisconnect();
                     Connect.myPG.mBluetoothGatt.connect();
                 }
@@ -669,7 +682,7 @@ public class InfoPage extends AppCompatActivity {
                 if (buffer[i] == '\n')
                     linesCount++;
             }
-            lines_archive = linesCount + 1;         //Число не отправленных пакетов после включения программы
+            lines_archive = linesCount;         //Число не отправленных пакетов после включения программы
         }
         catch(IOException ex) {
             Toast.makeText(this, ex.getMessage(), Toast.LENGTH_SHORT).show();
