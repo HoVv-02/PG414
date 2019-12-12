@@ -77,8 +77,8 @@ public class InfoPage extends AppCompatActivity {
     public static TaskDynRead readDynParam;         //поток чтения параметров
     public   MyTask_reg send_asynk;                 //поток отправки сообщений
 
-  //  public static LocationManager manager;                        //менеджер локаций для работы с GPS
-  //  public static LocationManager managerNet;                     //менеджер локаций для работы с сервисами от гугл
+  //  public static LocationManager manager;                      //менеджер локаций для работы с GPS
+  //  public static LocationManager managerNet;                   //менеджер локаций для работы с сервисами от гугл
 
     public static boolean connect_device =  false;                //соединение с устройством
     public static boolean connect_server =  false;                //соединение с сервером
@@ -87,7 +87,7 @@ public class InfoPage extends AppCompatActivity {
 
     public static int lines_archive = 0;                          //строк в архиве
     public final static String PARAM_TASK = "task";
-    public static String param_lat_lon = "none";                                     //координаты полученные от сервиса - Широта
+    public static String param_lat_lon = "none";                  //координаты полученные от сервиса - Широта
 
 
 
@@ -97,8 +97,12 @@ public class InfoPage extends AppCompatActivity {
     @Override
     protected void onDestroy()
     {
-        super.onDestroy();
+        Log.d("InfoPage","Меня сломали. Гасим сервисы");
         stopService(new Intent(this, GPS_service.class));
+        timer.cancel();
+        readDynParam.cancel(false);
+        super.onDestroy();
+
     }
 
     LocationManager mLocationManager;
@@ -182,10 +186,10 @@ public class InfoPage extends AppCompatActivity {
         }
 
         //Выводим описатели газа
-        gaz1.setText(Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]); //  R.string.h2s)
-        gaz2.setText(Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);  // R.string.co);
-        gaz3.setText(Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);  // R.string.o2);
-        gaz4.setText(Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]); //  R.string.ch4)
+        gaz1.setText(Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]);
+        gaz2.setText(Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);
+        gaz3.setText(Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);
+        gaz4.setText(Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]);
 
         //Статус
         tstatus = findViewById(R.id.tstate);
@@ -215,7 +219,7 @@ public class InfoPage extends AppCompatActivity {
           }
           else
           {
-            startService(new Intent(this, GPS_service.class));
+              startService(new Intent(this, GPS_service.class));
           }
         //Обновляем GPS
         Location lastKnownLocation = getLastKnownLocation();
@@ -304,8 +308,10 @@ public class InfoPage extends AppCompatActivity {
                             ;                      //ждем пока не прочтется
                         if (abort_counter >= 5)
                             Log.d("ПГ-414","Не могу достучасться");
-                        else
-                            Log.d("ПГ-414","Прочитал");
+                        else {
+                            Log.d("ПГ-414", "Прочитал");
+                            connToDev = 0;
+                        }
 
                         abort_counter = 0;
                         cnt_con = true;
@@ -517,6 +523,35 @@ public class InfoPage extends AppCompatActivity {
     }
 
     //*******************TEST ZONE***************************
+    //Вывод окна для запроса очистки файла
+    public void clear_btn()
+    {
+        try {
+            AlertDialog.Builder alert = new AlertDialog.Builder(InfoPage.this, R.style.AlertDialogCustom);
+
+            alert.setTitle(getString(R.string.Alert_title));
+            alert.setMessage(getString(R.string.Clear_file));
+
+            alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int whichButton) {
+                    Clear_file();
+                }
+            });
+
+            alert.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int whichButton) {
+                    // Canceled.
+                }
+            });
+
+            alert.show();
+
+        }
+        catch (Exception ex)
+        {
+            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
     //*******************************************************
     public void Construct_JobInfo()
     {
@@ -610,8 +645,10 @@ public class InfoPage extends AppCompatActivity {
              String param = "";
 
             /*Обновляем информацию по GPS*/
-            tgps.setText(param_lat_lon);
-             Connect.myPG.gps = param_lat_lon;
+            if (param_lat_lon != "none") {
+                tgps.setText(param_lat_lon);
+                Connect.myPG.gps = param_lat_lon;
+            }
 
             if (cnt_con)
             {
@@ -715,7 +752,7 @@ public class InfoPage extends AppCompatActivity {
 
 
     //Очистка файла
-    protected void Clear_file(View view)
+    protected void Clear_file()
     {
      try {
             FileOutputStream fos = null;
@@ -729,10 +766,19 @@ public class InfoPage extends AppCompatActivity {
 
     }
 
+    int Desc_counter = 0;          //показывает сколько раз вызван дескриптор
+
     //Печать текстового дескриптора катринки
-    protected void PrintToast(View view)
+    public void PrintToast(View view)
     {
+        Desc_counter++;
+        if (Desc_counter > 8)
+        {
+            clear_btn();
+            lines_archive = 0;
+        }
         Toast.makeText(this, view.getContentDescription(), Toast.LENGTH_SHORT).show();
+
     }
     ///
 //-----------------------------------------------------------------------------------------------

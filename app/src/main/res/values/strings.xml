@@ -42,4 +42,6 @@
     <string name="Message_powermanage">For the application to work correctly, you must turn off energy optimization</string>
     <string name="Geo_work">Determination of geolocation</string>
     <string name="Geo_work_text">The geolocation in the background</string>
+    <string name="Clear_file">Clear file-archive?</string>
+    <string name="Alert_title">Alert</string>
 </resources>

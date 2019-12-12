@@ -42,4 +42,6 @@
     <string name="Message_powermanage">Для корректной работы приложения необходимо отключить оптимизацию энергии</string>
     <string name="Geo_work">Работа с геолокацией</string>
     <string name="Geo_work_text">Ведется фоновое определение геолокации</string>
+    <string name="Clear_file">Очистить файл архива?</string>
+    <string name="Alert_title">Внимание</string>
 </resources>

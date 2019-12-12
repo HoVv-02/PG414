@@ -93,7 +93,6 @@
         android:layout_width="194dp"
         android:layout_height="47dp"
         android:layout_marginBottom="18dp"
-        android:onClick="Clear_file"
         android:text="Калибровка 0"
         android:visibility="invisible"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -266,6 +265,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        app:layout_constraintGuide_begin="20dp" />
+        app:layout_constraintGuide_begin="-83dp" />
 
 </android.support.constraint.ConstraintLayout>

@@ -222,7 +222,8 @@ public class Connect extends AppCompatActivity {
                 try {
                     btScanner.startScan(leScanCallback);                                                //запускаем сканирование
                 }
-                catch (Exception ex) {peripheralTextView.setText(R.string.scan_error);}
+                catch (Exception ex)
+                {peripheralTextView.setText(R.string.scan_error);}
                 return null;
             }
         };
@@ -237,14 +238,15 @@ public class Connect extends AppCompatActivity {
         startScanningButton.setVisibility(View.VISIBLE);
         stopScanningButton.setVisibility(View.INVISIBLE);
         //Останавливаем скан
-
         AsyncTask.execute(new Runnable() {
             @Override
             public void run() {
                 if (btScanner != null)
                     btScanner.stopScan(leScanCallback);
             }
-        });
+        }
+        );
+
     }
 
     //текущий элемент к которому будет совершено подключение
