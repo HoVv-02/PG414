@@ -44,7 +44,7 @@ public class GPS_service extends Service {
         listener = new LocationListener() {
             @Override
             public void onLocationChanged(Location location) {
-                Log.d("GPS", "обновил координаты");
+
                 Intent broadcastIntent = new Intent(InfoPage.BROADCAST_ACTION);                     //интент для широковещательной передачи данных из сервиса в форму активити
                 String lat;                                                                         //широта
                 String longt;                                                                       //долгота
@@ -53,6 +53,7 @@ public class GPS_service extends Service {
                 if (lat.length() > 12) lat = lat.substring(0, 11);                                  //регулируем длинну полученных координат
                 if (longt.length() > 12) longt = longt.substring(0, 11);                            //регулируем длинну полученных координат
                 broadcastIntent.putExtra(InfoPage.PARAM_TASK,lat+", "+ longt);                //формируем данные для отправки в активити
+                Log.d("GPS", "обновил координаты:" + lat+", "+ longt);
                 sendBroadcast(broadcastIntent);                                                     //отправляем
             }
 
@@ -69,15 +70,17 @@ public class GPS_service extends Service {
             @Override
             public void onProviderDisabled(String s) {
                 provider = locationManager.getBestProvider(criteria, true);                     //если провайдер не достпуен, пробуем получить другой
-                locationManager.requestLocationUpdates(provider,5000,minDistance,listener);
+                locationManager.requestLocationUpdates(provider,5000, minDistance, listener);
             }
         };
-        criteria = new Criteria();
-        criteria.setAccuracy(Criteria.ACCURACY_FINE);                                                               //определяем по какому критерию будет выбираться лучший провайдер
+        //определяем по какому критерию будет выбираться лучший провайдер
         locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
-        //noinspection MissingPermission
-        provider = locationManager.getBestProvider(criteria, true);
-        locationManager.requestLocationUpdates(provider,5000,minDistance,listener);
+         //---Выбираем лучший провайдер. Но исходя из того, что GPS потребляет много, включаем оптимальный режим качество/потребление
+          criteria = new Criteria();
+          criteria.setAccuracy(Criteria.ACCURACY_FINE);
+        //  provider = locationManager.getBestProvider(criteria, true);
+        provider = "network";
+        locationManager.requestLocationUpdates(provider,5000, minDistance, listener);
     }
 
     //При старте, согласно тербованиям API Android v 8.0+ необходимо оповестить пользователя о работе

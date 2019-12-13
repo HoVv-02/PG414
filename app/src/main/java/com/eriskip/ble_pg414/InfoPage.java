@@ -268,7 +268,7 @@ public class InfoPage extends AppCompatActivity {
     protected void onPause()
     {
         Log.d("ON PAUSE RUN", "Я пошел спать");
-        //При остановке отключаем GPS позиционирование
+        //При остановке переводим GPS позиционирование на другой сервис
         super.onPause();
 
     }

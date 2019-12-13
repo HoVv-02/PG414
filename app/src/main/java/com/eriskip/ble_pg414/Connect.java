@@ -445,7 +445,7 @@ public class Connect extends AppCompatActivity {
                         else trueRead = false;
                     break;
 
-                default: peripheralTextView.setText(R.string.un_package);
+                 default: peripheralTextView.setText(R.string.un_package);
             }
             State_pack = RX_pack.COMPLETE;
 
