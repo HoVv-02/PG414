@@ -253,6 +253,7 @@ public class InfoPage extends AppCompatActivity {
         else
         {
             tgps.setText("проверьте настройки GPS");
+
         }
     }
 
@@ -261,6 +262,10 @@ public class InfoPage extends AppCompatActivity {
     {
         //При восстановлении работы вновь запускаем GPS & NEY провайдеров для определения координат
         super.onResume();
+        /*При выходе из сна выставляем режим лучшего доступного провайдора */
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(new Intent(this, GPS_service.class).putExtra("mode", 3));
+        }
         Log.d("ON RESUME RUN", "Я проснулся");
     }
 
@@ -268,6 +273,10 @@ public class InfoPage extends AppCompatActivity {
     protected void onPause()
     {
         Log.d("ON PAUSE RUN", "Я пошел спать");
+        /*При переходе в сон выставляем режим провайдора location NETWORK*/
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(new Intent(this, GPS_service.class).putExtra("mode", 2));
+        }
         //При остановке переводим GPS позиционирование на другой сервис
         super.onPause();
 
@@ -499,7 +508,7 @@ public class InfoPage extends AppCompatActivity {
 
             alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface dialog, int whichButton) {
-                    String resulty = ""; //= input.getText().toString();
+                    String resulty = input.getText().toString();
                     //Заполняем поле
                     MainActivity.Server = resulty;
                     MainActivity.editor.putString(MainActivity.SERVER_SETTING, resulty);

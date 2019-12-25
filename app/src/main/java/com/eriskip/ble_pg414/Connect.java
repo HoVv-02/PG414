@@ -342,7 +342,6 @@ public class Connect extends AppCompatActivity {
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             super.onCharacteristicRead(gatt, characteristic, status);
-            Log.d(TAG, "onCharacteristicRead " + status);
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 try {
                     broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
@@ -356,8 +355,6 @@ public class Connect extends AppCompatActivity {
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             super.onCharacteristicWrite(gatt, characteristic, status);
-            Log.d(TAG, "onCharacteristicWrite " + status);
-
         }
 
         //При выборе характеристики

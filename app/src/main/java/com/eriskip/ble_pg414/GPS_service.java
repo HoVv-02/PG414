@@ -58,18 +58,19 @@ public class GPS_service extends Service {
             }
 
             @Override
-            public void onStatusChanged(String s, int i, Bundle bundle) {
+            public void onStatusChanged(String provider, int state, Bundle bundle) {
+                Log.d("GPS", "статус провайдера изменен: " + provider + ". " + state);
+            }
+
+            @Override
+            public void onProviderEnabled(String provider) {
 
             }
 
             @Override
-            public void onProviderEnabled(String s) {
-
-            }
-
-            @Override
-            public void onProviderDisabled(String s) {
-                provider = locationManager.getBestProvider(criteria, true);                     //если провайдер не достпуен, пробуем получить другой
+            public void onProviderDisabled(String prov) {
+                Log.d("GPS", "Провайдера отключен: " + prov);
+                provider = locationManager.getBestProvider(criteria, true);                     //если провайдер недостпуен, пробуем получить другой
                 locationManager.requestLocationUpdates(provider,5000, minDistance, listener);
             }
         };
@@ -78,9 +79,8 @@ public class GPS_service extends Service {
          //---Выбираем лучший провайдер. Но исходя из того, что GPS потребляет много, включаем оптимальный режим качество/потребление
           criteria = new Criteria();
           criteria.setAccuracy(Criteria.ACCURACY_FINE);
-        //  provider = locationManager.getBestProvider(criteria, true);
-        provider = "network";
-        locationManager.requestLocationUpdates(provider,5000, minDistance, listener);
+          provider = locationManager.getBestProvider(criteria, true);
+          locationManager.requestLocationUpdates(provider,5000, minDistance, listener);
     }
 
     //При старте, согласно тербованиям API Android v 8.0+ необходимо оповестить пользователя о работе
@@ -97,6 +97,17 @@ public class GPS_service extends Service {
 
         this.startForeground(196, notification);             //показываем сообщение
                                                                  //запускаем в потоке
+        int mode = intent.getIntExtra("mode", 1);
+        if (mode == 2)
+        {
+            provider = locationManager.getBestProvider(criteria, true);
+            locationManager.requestLocationUpdates(provider,5000, minDistance, listener);
+        } else
+        if (mode == 3)
+        {
+            provider = "network";
+            locationManager.requestLocationUpdates(provider,5000, minDistance, listener);
+        }
         return super.onStartCommand(intent, flags, startId);
     }
 
@@ -104,7 +115,7 @@ public class GPS_service extends Service {
         super.onDestroy();
         if(locationManager != null){
             //noinspection MissingPermission
-            locationManager.removeUpdates(listener);
+            locationManager.removeUpdates(listener); //
         }
     }
 
