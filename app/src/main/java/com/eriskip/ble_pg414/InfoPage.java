@@ -74,8 +74,7 @@ public class InfoPage extends AppCompatActivity {
     ImageView disconnect, arch_alert;
     //----------------------------------------------------------------------------------------------
 
-    public static TaskDynRead readDynParam;         //поток чтения параметров
-    public   MyTask_reg send_asynk;                 //поток отправки сообщений
+    public static Thread readDynParam;         //поток чтения параметров
 
   //  public static LocationManager manager;                      //менеджер локаций для работы с GPS
   //  public static LocationManager managerNet;                   //менеджер локаций для работы с сервисами от гугл
@@ -100,7 +99,7 @@ public class InfoPage extends AppCompatActivity {
         Log.d("InfoPage","Меня сломали. Гасим сервисы");
         stopService(new Intent(this, GPS_service.class));
         timer.cancel();
-        readDynParam.cancel(false);
+        stop_dyn = true;
         super.onDestroy();
 
     }
@@ -127,9 +126,13 @@ public class InfoPage extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        stop_dyn = false;
         setContentView(R.layout.activity_info_page);
         if (!Connect.offline && !Connect.hideMode)
-             Connect.myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
+        {
+            Connect.myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
+            Connect.read_pause = false;
+        }
         else
             Connect.read_pause = true;
         Context context = getApplicationContext();
@@ -210,9 +213,7 @@ public class InfoPage extends AppCompatActivity {
             arch_alert.setVisibility(View.INVISIBLE);
         }
 
-        readDynParam = new TaskDynRead();
-        send_asynk = new MyTask_reg();
-
+        readDynParam = new Thread(runnable_dyn);
 
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
               startForegroundService(new Intent(this, GPS_service.class));
@@ -229,10 +230,7 @@ public class InfoPage extends AppCompatActivity {
         fon_val_refresh_start();
         if (!Connect.offline) {
 
-            readDynParam.execute(); //TaskDynRead
-            send_asynk.execute();
-
-
+            readDynParam.start(); //TaskDynRead
         }
     }
     //Обновление параметров GPS
@@ -288,16 +286,15 @@ public class InfoPage extends AppCompatActivity {
 
     boolean cnt_con;           //можно ли увеличивать счетсчик подключения и писать в файл
     boolean sending_archive;   //идет отправка архива
+    static public boolean stop_dyn;     //отключить динамическое чтение
 
     /* Поток чтения динамических параметров */
-    class TaskDynRead extends AsyncTask<Void, Void, Void> {
-
-        @Override
-        protected Void doInBackground(Void... params) {
+    Runnable runnable_dyn = new Runnable() {
+        public void run() {
             try {
                 while (true) {
 
-                    if (isCancelled()) return null;
+                    if (stop_dyn) return;
 
                     sending_reg_info("");
                     //Если не пришла команда паузы чтения
@@ -312,6 +309,7 @@ public class InfoPage extends AppCompatActivity {
                         Connect.myPG.reqDyn();
                         Connect.State_pack = Connect.RX_pack.DYNPARAM;
                         Thread.sleep(2300);
+                        if (stop_dyn) return;
                         Connect.myPG.startRead();
                         while (Connect.State_pack != Connect.RX_pack.COMPLETE && abort_counter < 5)
                             ;                      //ждем пока не прочтется
@@ -346,9 +344,9 @@ public class InfoPage extends AppCompatActivity {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            return null;
+            return;
         }
-    }
+    };
 
         public byte cnt_sec = 0;
         byte abort_counter = 0;
@@ -376,17 +374,6 @@ public class InfoPage extends AppCompatActivity {
         }
 
 
-
-        /////////*******         Отправка данных на сервер           *********\\\\\\\\\\\\\
-        class MyTask_reg extends AsyncTask<Void,Void,Void> {
-
-            @Override
-            protected Void doInBackground(Void... params) {
-                while (true) {
-
-                }
-            }
-        }
 
         //Функция отправки регистрационной информации. Отправляется 1 раз на сервер для авторизациии устройства в системе
          public static byte[] sending_reg_info(String send_arch)

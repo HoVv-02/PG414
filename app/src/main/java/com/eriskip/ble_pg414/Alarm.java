@@ -17,7 +17,7 @@ public class Alarm extends BroadcastReceiver
     public void onReceive(Context context, Intent intent)
     {
         PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "");         //конфигурируем wakelock - для того чтобы разлочивать устройство
+        PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ERIS_WAKE_LOCK");         //конфигурируем wakelock - для того чтобы разлочивать устройство
         wl.acquire();
 
         // Put here YOUR code.

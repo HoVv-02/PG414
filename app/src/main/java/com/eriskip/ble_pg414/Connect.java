@@ -19,6 +19,8 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.location.LocationManager;
 import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Message;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
@@ -92,6 +94,7 @@ public class Connect extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         //  super.onActivityResult(requestCode, resultCode, data);
         try {
+            InfoPage.stop_dyn = true;
             if (myPG != null) {
                 Log.d(TAG, "Отключаемся");
                 myPG.mBluetoothGatt.disconnect();
@@ -114,6 +117,7 @@ public class Connect extends AppCompatActivity {
 
     }
 
+    Handler handler;            //служит для вывода сообщений из потока
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -166,8 +170,6 @@ public class Connect extends AppCompatActivity {
             aboutDialog.show();
         }
 
-
-
         //Список найденных устройств
         deviceList =  findViewById(R.id.list_devices);
         deviceList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -177,6 +179,30 @@ public class Connect extends AppCompatActivity {
 
             }
         });
+
+        //Для вывода на экран статуса подключения
+        handler = new Handler() {
+
+            @Override
+            public void handleMessage(Message msg) {
+                stateText.setText(State_of_connection);
+                if (be_connect == false) {
+                    pgBar.setVisibility(View.INVISIBLE);
+                    stateText.setVisibility(View.INVISIBLE);
+                    peripheralTextView.setText(getString(R.string.err_conncet));
+                }
+                if (offline == false)
+                {
+                    peripheralTextView.setText(getString(R.string.info_read));
+                    pgBar.setVisibility(View.INVISIBLE);
+                    stateText.setVisibility(View.INVISIBLE);
+                    offline = false;
+                    startScanningButton.setVisibility(View.VISIBLE);
+                    Intent intent = new Intent(Connect.this, InfoPage.class);
+                    startActivityForResult(intent, CHOOSE_THIEF);
+                }
+            }
+        };
 
         int cnt = 100;
         try {
@@ -279,7 +305,6 @@ public class Connect extends AppCompatActivity {
     //текущий элемент к которому будет совершено подключение
     private int index;
 
-    MyTask readParam;
     //Подключение к выбранному BLE устройству
     public void Connect_to_BLE(int ind)
     {
@@ -289,8 +314,9 @@ public class Connect extends AppCompatActivity {
         }
 
         index = ind;
-        readParam = new MyTask();
-        readParam.execute();
+        /*Запускаем  поток*/
+        Thread thread = new Thread(runnable_connect);
+        thread.start();
         pgBar.setVisibility(View.VISIBLE);
         stateText.setVisibility(View.VISIBLE);
         stateText.setText(R.string.params_reading);
@@ -553,138 +579,105 @@ public class Connect extends AppCompatActivity {
     }
 
 
+    Runnable runnable_connect = new Runnable() {
+        public void run() {
+                    try {
 
-
-    //Асинхроннный поток для выполнения подключения
-    class MyTask extends AsyncTask<Void, Void, Void> {
-
-        @Override
-        protected void onPostExecute(Void aVoid) {
-            super.onPostExecute(aVoid);
-            peripheralTextView.setText(R.string.info_read);
-            pgBar.setVisibility(View.INVISIBLE);
-            stateText.setVisibility(View.INVISIBLE);
-            offline = false;
-            startScanningButton.setVisibility(View.VISIBLE);
-            Intent intent = new Intent(Connect.this, InfoPage.class);
-            startActivityForResult(intent, CHOOSE_THIEF);
-        }
-
-
-        @Override
-        protected void onProgressUpdate(Void... values) {
-            super.onProgressUpdate(values);
-            stateText.setText(State_of_connection);
-            if (be_connect == false) {
-                pgBar.setVisibility(View.INVISIBLE);
-                stateText.setVisibility(View.INVISIBLE);
-                peripheralTextView.setText(R.string.err_conncet);
-            }
-        }
-
-       public BluetoothDevice Current_Device;
-        @Override
-        protected Void doInBackground(Void... params) {
-            try {
-
-                breaker = false;            //не обрываем поток
-                Current_Device = BLElist.get(index);
-                mBluetoothGatt = Current_Device.connectGatt(Connect.this, true, bluetoothGattCallback);
-                //Ожидание после подключения
-                try {
-                    Thread.sleep( 2000);
-                }catch (Exception e){}
-
-                short z = 0;
-                List<BluetoothGattService> BLEList = getSupportedGattServices();
-                //Переподключаемся пока не произойдет подключения( 5 попыток)
-                do {
-                    BLEList = getSupportedGattServices();
-                    z++;
-                    if ((BLEList.size() == 0)) {
-                        mBluetoothGatt = Current_Device.connectGatt(Connect.this, true, bluetoothGattCallback);
-                        Thread.sleep(1500);
-                        Log.d(TAG, "BLEList ITEMS:" + BLEList.size());
+                    offline = true;
+                    BluetoothDevice Current_Device;              //текущий девайс для подключения
+                    breaker = false;                             //не обрываем поток
+                    Current_Device = BLElist.get(index);
+                    mBluetoothGatt = Current_Device.connectGatt(Connect.this, true, bluetoothGattCallback);
+                    //Ожидание после подключения
+                    try {
+                        Thread.sleep(2000);
+                    } catch (Exception e) {
                     }
-                    else break;
-                }
-                while ((BLEList.size() == 0) && (z < 5));
 
-
-                if (BLEList.size() == 0)
-                {
-                    State_of_connection = getResources().getString(R.string.repeat_error);
-                    be_connect = false;
-                    publishProgress();
-                    this.cancel(false);
-                }
-                else    State_of_connection = getResources().getString(R.string.params_reading);
-                try {
-                    if (BLEList!= null) {
-                        Log.d(TAG, "BLEList 3 pos caption:" + BLEList.get(3).getUuid());
-                        mCharacteristic = BLEList.get(3).getCharacteristic(UUID_DGS_STRING);
-                    }
-                    //Где 3 номер характеристики к которой хотим подключиться
-                    if (mCharacteristic != null)
-                    {
-                        be_connect = true;
-                        offline = false;
-                        //Создаем объект класса ПГ
-                        myPG = new PG414(mBluetoothGatt, mCharacteristic);
-                        myPG.set_locale(getResources().getConfiguration().locale.toString());
-                        //запускаем фоновый поток
-                    }
-                    else
-                    {
-                        State_of_connection  = getResources().getString(R.string.err_conncet);;
-                    }
-                } catch (Exception e) { this.cancel(false); }
-                if (be_connect) {
-                    trueRead = false;
-                    //Читаем динамические параметры устройства
+                    short z = 0;
+                    List<BluetoothGattService> BLEList = getSupportedGattServices();
+                    //Переподключаемся пока не произойдет подключения( 5 попыток)
                     do {
-                        myPG.reqDyn();
-                        State_pack = RX_pack.DYNPARAM;
-                        Thread.sleep(delay_module);
-                        myPG.startRead();
-                        Thread.sleep(500);
-                        if (breaker) return null;
-                    } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
-                    publishProgress();
-                    do {
-                        //Читаем параметры №1 устройства
+                        BLEList = getSupportedGattServices();
+                        z++;
+                        if ((BLEList.size() == 0)) {
+                            mBluetoothGatt = Current_Device.connectGatt(Connect.this, true, bluetoothGattCallback);
+                            Thread.sleep(1500);
+                            Log.d(TAG, "BLEList ITEMS:" + BLEList.size());
+                        } else break;
+                    }
+                    while ((BLEList.size() == 0) && (z < 5));
+
+
+                    if (BLEList.size() == 0) {
+                        State_of_connection = getResources().getString(R.string.repeat_error);
+                        be_connect = false;
+                        handler.sendEmptyMessage(1);
+                        return;
+                    } else State_of_connection = getResources().getString(R.string.params_reading);
+                    try {
+                        if (BLEList != null) {
+                            Log.d(TAG, "BLEList 3 pos caption:" + BLEList.get(3).getUuid());
+                            mCharacteristic = BLEList.get(3).getCharacteristic(UUID_DGS_STRING);
+                        }
+                        //Где 3 номер характеристики к которой хотим подключиться
+                        if (mCharacteristic != null) {
+                            be_connect = true;
+                            //Создаем объект класса ПГ
+                            myPG = new PG414(mBluetoothGatt, mCharacteristic);
+                            myPG.set_locale(getResources().getConfiguration().locale.toString());
+                            //запускаем фоновый поток
+                        } else {
+                            State_of_connection = getResources().getString(R.string.err_conncet);
+                            ;
+                        }
+                    } catch (Exception e) {
+                        return;
+                    }
+                    if (be_connect) {
+                        trueRead = false;
+                        //Читаем динамические параметры устройства
                         do {
-                            numParams = 1;
-                            myPG.reqParam(numParams);
-                            State_pack = RX_pack.READPARAM;
+                            myPG.reqDyn();
+                            State_pack = RX_pack.DYNPARAM;
                             Thread.sleep(delay_module);
                             myPG.startRead();
                             Thread.sleep(500);
-                            if (breaker) return null;
+                            if (breaker) return;
                         } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
-                    publishProgress();
-                    //Читаем параметры №2 устройства
-                    do {
-                        numParams = 2;
-                        myPG.reqParam(numParams);
-                        State_pack = RX_pack.READPARAM;
-                        Thread.sleep(delay_module);
-                        myPG.startRead();
-                        Thread.sleep(500);
-                        if (breaker) return null;
-                    } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
+                        handler.sendEmptyMessage(1);
+                        do {
+                            //Читаем параметры №1 устройства
+                            do {
+                                numParams = 1;
+                                myPG.reqParam(numParams);
+                                State_pack = RX_pack.READPARAM;
+                                Thread.sleep(delay_module);
+                                myPG.startRead();
+                                Thread.sleep(500);
+                                if (breaker) return;
+                            } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
+                            handler.sendEmptyMessage(1);
+                            //Читаем параметры №2 устройства
+                            do {
+                                numParams = 2;
+                                myPG.reqParam(numParams);
+                                State_pack = RX_pack.READPARAM;
+                                Thread.sleep(delay_module);
+                                myPG.startRead();
+                                Thread.sleep(500);
+                                if (breaker) return;
+                            } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
+                        }
+                        while (!trueRead);
+                        offline = false;
+                        handler.sendEmptyMessage(1);
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
-                    while (!trueRead);
-
-                    publishProgress();
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+                return;
             }
-            return null;
-        }
-
-
-
-    }
+        };
+//--     end-file
 }
