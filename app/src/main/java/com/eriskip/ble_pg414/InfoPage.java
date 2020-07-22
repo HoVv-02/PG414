@@ -772,7 +772,6 @@ public class InfoPage extends AppCompatActivity {
             Toast.makeText(this, ex.getMessage(), Toast.LENGTH_SHORT).show();
             lines_archive = 0;
         }
-
     }
 
     int Desc_counter = 0;          //показывает сколько раз вызван дескриптор

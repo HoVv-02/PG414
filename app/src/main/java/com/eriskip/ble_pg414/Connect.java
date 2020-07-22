@@ -1,6 +1,7 @@
 package com.eriskip.ble_pg414;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -16,10 +17,10 @@ import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.method.ScrollingMovementMethod;
@@ -91,8 +92,14 @@ public class Connect extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         //  super.onActivityResult(requestCode, resultCode, data);
         try {
-            if (myPG != null)
+            if (myPG != null) {
+                Log.d(TAG, "Отключаемся");
+                myPG.mBluetoothGatt.disconnect();
                 myPG.mBluetoothGatt.close();
+                myPG.mBluetoothGatt = null;
+                if (btScanner != null)
+                    btScanner.stopScan(leScanCallback);
+            }
         }catch (Exception ex)
         {
             Log.d(TAG, "Error close connection: " + ex);
@@ -101,6 +108,7 @@ public class Connect extends AppCompatActivity {
         {
             read_pause = true;
             bluetooth_en = 1;
+
             close();
         }
 
@@ -140,6 +148,25 @@ public class Connect extends AppCompatActivity {
             }
         });
         stopScanningButton.setVisibility(View.INVISIBLE);
+
+        //Запрос на доступ к месторасположению, начиная с 10 Андроид начали требовать при сканировани блютузных приложений
+        final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);           //нужен для того чтобы рповерить включена ли геолокация
+
+        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {                                         //проверяем
+            //Формируем диалоговое окно
+            final android.app.AlertDialog aboutDialog = new AlertDialog.Builder(
+                    Connect.this,  R.style.AlertDialogCustom).setMessage(getString(R.string.need_location))
+                    .setPositiveButton("OK", new DialogInterface.OnClickListener() {                           //формируем кнопку для активации ОК
+
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {                                    //а нее переписываем обработчик
+                            startActivity(new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));   //открываем меню для включения геолокации
+                        }
+                    }).create();
+            aboutDialog.show();
+        }
+
+
 
         //Список найденных устройств
         deviceList =  findViewById(R.id.list_devices);
@@ -203,6 +230,7 @@ public class Connect extends AppCompatActivity {
     };
 
 
+
     @SuppressLint("StaticFieldLeak")
     public void startScanning() {
         if (be_connect)                                                                             //если было подключение
@@ -215,19 +243,18 @@ public class Connect extends AppCompatActivity {
         peripheralTextView.setText(R.string.start_scan);
         startScanningButton.setVisibility(View.INVISIBLE);
         stopScanningButton.setVisibility(View.VISIBLE);
-        AsyncTask ScanTask = null;
-        ScanTask = new AsyncTask() {
+        Thread ScanTask = null;
+        ScanTask = new Thread(new Runnable(){
             @Override
-            protected Object doInBackground(Object[] objects) {
+            public void run() {
                 try {
                     btScanner.startScan(leScanCallback);                                                //запускаем сканирование
                 }
                 catch (Exception ex)
                 {peripheralTextView.setText(R.string.scan_error);}
-                return null;
             }
-        };
-        ScanTask.execute();                                                          //запускаем фоновый процесс
+        });
+           ScanTask.start();                                                          //запускаем фоновый процесс
     }
 
 
@@ -286,7 +313,7 @@ public class Connect extends AppCompatActivity {
     public final static UUID UUID_DGS_STRING =
             UUID.fromString(SampleGattAttributes.UUID_DGS_STRING);
 
-    private static final String TAG = "BluetoothLEService";
+    private static final String TAG = "FormConnect";
     private static final int STATE_DISCONNECT = 0;
     private static final int STATE_CONNECTING = 1;
     private static final int STATE_CONNECTED  = 2;

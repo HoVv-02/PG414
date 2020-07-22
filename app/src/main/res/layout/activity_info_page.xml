@@ -32,11 +32,12 @@
 
     <ImageView
         android:id="@+id/imageView2"
-        android:layout_width="197dp"
-        android:layout_height="442dp"
+        android:layout_width="@dimen/main_pic_height"
+        android:layout_height="0dp"
         android:layout_marginTop="20dp"
         android:layout_marginEnd="8dp"
         android:contentDescription="ЭРИС ПГ-414"
+        android:scaleType="fitStart"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/pg414" />
@@ -115,42 +116,23 @@
         android:id="@+id/tconc1"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="70dp"
         android:text="0.00"
         android:textColor="@color/colorPrimary"
-        android:textSize="18sp"
+        android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="@+id/imageView2"
+        app:layout_constraintStart_toStartOf="@+id/imageView2"
         app:layout_constraintTop_toBottomOf="@+id/gaz1" />
 
     <TextView
         android:id="@+id/tconc2"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="70dp"
         android:text="0.00"
         android:textColor="@color/colorPrimary"
-        android:textSize="18sp"
+        android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="@+id/imageView2"
+        app:layout_constraintStart_toStartOf="@+id/imageView2"
         app:layout_constraintTop_toBottomOf="@+id/gaz2" />
-
-    <TextView
-        android:id="@+id/gaz1"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="200dp"
-        android:layout_marginEnd="65dp"
-        android:text="H2S, ppm:"
-        app:layout_constraintEnd_toEndOf="@+id/imageView2"
-        app:layout_constraintTop_toTopOf="@+id/imageView2" />
-
-    <TextView
-        android:id="@+id/gaz2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="65dp"
-        android:text="CO, ppm:"
-        app:layout_constraintEnd_toEndOf="@+id/imageView2"
-        app:layout_constraintTop_toBottomOf="@+id/tconc1" />
 
     <TextView
         android:id="@+id/tgps"
@@ -165,43 +147,65 @@
         app:layout_constraintTop_toBottomOf="@+id/textView7" />
 
     <TextView
-        android:id="@+id/gaz3"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="65dp"
-        android:text="O2, %об.д.:"
-        app:layout_constraintEnd_toEndOf="@+id/imageView2"
-        app:layout_constraintTop_toBottomOf="@+id/tconc2" />
-
-    <TextView
         android:id="@+id/tconc3"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="70dp"
         android:text="0.00"
         android:textColor="@color/colorPrimary"
-        android:textSize="18sp"
+        android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="@+id/imageView2"
+        app:layout_constraintStart_toStartOf="@+id/imageView2"
         app:layout_constraintTop_toBottomOf="@+id/gaz3" />
 
     <TextView
         android:id="@+id/gaz4"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="65dp"
         android:text="CH4, %об.д."
         app:layout_constraintEnd_toEndOf="@+id/imageView2"
+        app:layout_constraintStart_toStartOf="@+id/imageView2"
         app:layout_constraintTop_toBottomOf="@+id/tconc3" />
+
+    <TextView
+        android:id="@+id/gaz1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/main_top_margin"
+        android:text="H2S, ppm:"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="@+id/imageView2"
+        app:layout_constraintStart_toStartOf="@+id/imageView2"
+        app:layout_constraintTop_toTopOf="@+id/imageView2" />
+
+    <TextView
+        android:id="@+id/gaz2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="CO, ppm:"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="@+id/imageView2"
+        app:layout_constraintStart_toStartOf="@+id/imageView2"
+        app:layout_constraintTop_toBottomOf="@+id/tconc1" />
+
+    <TextView
+        android:id="@+id/gaz3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="O2, %об.д.:"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="@+id/imageView2"
+        app:layout_constraintStart_toStartOf="@+id/imageView2"
+        app:layout_constraintTop_toBottomOf="@+id/tconc2" />
 
     <TextView
         android:id="@+id/tconc4"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="70dp"
         android:text="0.00"
         android:textColor="@color/colorPrimary"
-        android:textSize="18sp"
+        android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="@+id/imageView2"
+        app:layout_constraintStart_toStartOf="@+id/imageView2"
         app:layout_constraintTop_toBottomOf="@+id/gaz4" />
 
     <TextView
@@ -265,6 +269,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        app:layout_constraintGuide_begin="-83dp" />
+        app:layout_constraintGuide_end="320dp" />
 
 </android.support.constraint.ConstraintLayout>

@@ -44,4 +44,6 @@
     <string name="Geo_work_text">The geolocation in the background</string>
     <string name="Clear_file">Clear file-archive?</string>
     <string name="Alert_title">Alert</string>
+    <string name="need_location">For the application to work, you must enable access to the location</string>
+
 </resources>

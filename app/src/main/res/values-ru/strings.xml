@@ -44,4 +44,5 @@
     <string name="Geo_work_text">Ведется фоновое определение геолокации</string>
     <string name="Clear_file">Очистить файл архива?</string>
     <string name="Alert_title">Внимание</string>
+    <string name="need_location">Для работы приложения необходимо включить доступ к месторасположению</string>
 </resources>
