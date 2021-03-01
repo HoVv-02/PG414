@@ -214,7 +214,6 @@ public class InfoPage extends AppCompatActivity {
         }
 
         readDynParam = new Thread(runnable_dyn);
-
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
               startForegroundService(new Intent(this, GPS_service.class));
           }
@@ -391,13 +390,14 @@ public class InfoPage extends AppCompatActivity {
                          Connect.myPG.status = "OK";
                      }
                      params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
-                             + "&gps=" + Connect.myPG.gps + "&state=" + Connect.myPG.status
+                             + "&gps="  + Connect.myPG.gps + "&state=" + Connect.myPG.status
                              + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+ gaz1.getText().toString()   //(R.string.h2s)
                              + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+ gaz2.getText().toString()   //(R.string.co)
                              + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+ gaz3.getText().toString()   //(R.string.o2)
                              + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ gaz4.getText().toString()   //(R.string.ch4)
-                             + "&field1="+ Connect.myPG.percent_charge                                                            //заряд
+                             + "&field1="+ Connect.myPG.percent_charge                                               //заряд
                              + "&key=1562";
+
                  } else if (Send_Message == Sendind.eArchive) {             //если ведется архиваня отправка данных
                      params = send_arch;
                  }

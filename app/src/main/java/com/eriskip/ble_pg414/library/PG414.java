@@ -47,7 +47,6 @@ public class PG414 {
         public int conc4;                         //Текущая концентрация с сенсора 4
 
         public long zavod_number;       //заводской номер
-
         public byte percent_charge;     //процент зарядки батареи
 
         public String[]     gazUnit = new String[4];    //единицы измерения
@@ -127,7 +126,7 @@ public class PG414 {
                         "Ошибка неисправности И2Ц",
                         "Ошибка неисправности И2Ц",
                         "Ошибка неисправности И2Ц",
-                        "Ошибка при чтении из флеша",
+                        "Ошибка при чтении из флеш",
                         "НЕ ИСПОЛЬЗУЕТСЯ",
                         "Датчик темп. неисправен",
                         "Датчик давления неисправен",
@@ -202,10 +201,10 @@ public class PG414 {
         //Парсим прочитанные динамические параметры
         public void parseDyn(byte[] answer)
         {
-            conc1 = ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF);
-            conc2 = ((answer[7]  & 0xFF) << 8) + (answer[6]  & 0xFF);
-            conc3 = ((answer[9]  & 0xFF) << 8) +  (answer[8] & 0xFF);
-            conc4 = ((answer[11] & 0xFF) << 8) +  (answer[10] & 0xFF);
+            conc1 = ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF);       //текущая концентрация по 1 каналу
+            conc2 = ((answer[7]  & 0xFF) << 8) + (answer[6]  & 0xFF);       //текущая концентрация по 2 каналу
+            conc3 = ((answer[9]  & 0xFF) << 8) +  (answer[8] & 0xFF);       //текущая концентрация по 3 каналу
+            conc4 = ((answer[11] & 0xFF) << 8) +  (answer[10] & 0xFF);      //текущая концентрация по 4 каналу
             for(byte x = 0; x < 8; x++)
             {
                 state[x] = answer[12 + x];
@@ -228,6 +227,7 @@ public class PG414 {
             mBluetoothGatt.writeCharacteristic(mCharacteristic);
         }
 
+        //Парсим конкретную структуру с номером "num_struct"
         public boolean parseParam(byte[] answer, byte num_struct) throws UnsupportedEncodingException {
             byte i;
             byte gaz[] = new byte [7]; byte unit[] = new byte [7];
@@ -236,9 +236,6 @@ public class PG414 {
             {
                 case 1:
                             i = 8;
-                            if (HIDEMODE)
-                                zavod_number = zavod_mulage;
-                                    else
                                  zavod_number = (((answer[7]  & 0xFF) << 24) + ((answer[6]  & 0xFF) << 16) + ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF)) & 0xFFFFFFFFl;
                             for (byte x = 0; x < 4; x++) gazDiskret[x] = answer[i++];
                             for (byte x = 0; x < 2; x++)

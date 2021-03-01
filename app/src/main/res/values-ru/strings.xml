@@ -45,4 +45,6 @@
     <string name="Clear_file">Очистить файл архива?</string>
     <string name="Alert_title">Внимание</string>
     <string name="need_location">Для работы приложения необходимо включить доступ к месторасположению</string>
+    <string name="channel_name">Уведомления Eris</string>
+    <string name="channel_description">Уведомления</string>
 </resources>

@@ -1,12 +1,7 @@
 package com.eriskip.ble_pg414;
 
-
-
-
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.graphics.Color;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
@@ -14,28 +9,15 @@ import android.support.annotation.RequiresApi;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.content.SharedPreferences;
 import android.content.Context;
-import android.widget.TextView;
-
-import 	java.io.InputStream;
-import 	java.net.HttpURLConnection;
-import 	java.net.URL;
-import 	java.io.OutputStream;
-import java.io.ByteArrayOutputStream;
-
 
 
 public class MainActivity extends AppCompatActivity {
-
-
     static final private int CHOOSE_THIEF = 0;
     private static final String TAG = "Connection PG414";
-
-
     //>>>>> Настройки     -------------------------------------------------------------------
     static public SharedPreferences mSettings;
     static public SharedPreferences.Editor editor;
@@ -80,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
         // Получаем текстовый описатель
         Description = mSettings.getString(DESCRIPT_SETTINGS,"");
         // Получаем сервер подключения
-        Server = mSettings.getString(SERVER_SETTING,"http://89.250.220.50:8001");
+        Server = mSettings.getString(SERVER_SETTING,"http://erconnect.eriskip.com:8001");
 
         eLogin.setText(Login);
         ePassword.setText(Password);
@@ -92,7 +74,6 @@ public class MainActivity extends AppCompatActivity {
         {
             Set_Battery();  //запускаем диалог необходимости выключения режима энергосбережения
         }
-
 
 ////TMP   //Временная строка для того чтобы переключиться на сразу форму подключения
 //        Intent intent = new Intent(this, Connect.class);
@@ -144,6 +125,8 @@ public class MainActivity extends AppCompatActivity {
 
         alert.show();
     }
+
+
 
     @Override
     protected void onPause() {
