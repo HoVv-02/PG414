@@ -47,5 +47,6 @@
     <string name="need_location">For the application to work, you must enable access to the location</string>
     <string name="channel_name">Eris notification</string>
     <string name="channel_description">Notification</string>
+    <string name="con_lost">Lost connection with device</string>
 
 </resources>

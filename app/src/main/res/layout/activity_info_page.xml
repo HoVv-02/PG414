@@ -105,7 +105,7 @@
         android:layout_width="150dp"
         android:layout_height="49dp"
         android:layout_marginBottom="17dp"
-        android:onClick="enter_server"
+        android:onClick="enterServer"
         android:text="@string/Config_but"
         android:visibility="visible"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -249,7 +249,7 @@
         android:layout_marginTop="2dp"
         android:layout_marginEnd="8dp"
         android:contentDescription="@string/Arch_Toast"
-        android:onClick="PrintToast"
+        android:onClick="printToast"
         app:layout_constraintEnd_toStartOf="@+id/arch_cnt"
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/avrr" />

@@ -38,7 +38,7 @@ public class GPS_service extends Service {
     private String provider;
 
     private int minDistance = 0;      //минимальная дистанция при которой необходимо обновлять GPS координаты
-    String CHANNEL_ID = "My_channel";
+    public static String CHANNEL_ID = "My_channel";
 
     @Nullable
     @Override

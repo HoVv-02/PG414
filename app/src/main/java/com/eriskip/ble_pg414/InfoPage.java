@@ -11,14 +11,10 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
-
-import android.os.AsyncTask;
 
 import android.os.Build;
 import android.support.v4.app.ActivityCompat;
@@ -58,8 +54,6 @@ public class InfoPage extends AppCompatActivity {
     public static String URL_event = "/event_add.php";                  //файл который отвечает за регстрацию события на сервере
     private static final String TAG = "Connection PG414";               //таг для логера
     private static final String FILE_NAME = "archive.dat";              //имя файла архива
- //   PowerManager pm;                                //Power Manager для управления питанием устройства
- //   PowerManager.WakeLock wakeLock;                 //конкретный объект который управляет отключение экрана и тп.
 
     public final static String BROADCAST_ACTION = "com.eriskip.ble_pg414";
     BroadcastReceiver br;   //слушатель параметров геолокациии от нашего сервиса
@@ -75,9 +69,6 @@ public class InfoPage extends AppCompatActivity {
     //----------------------------------------------------------------------------------------------
 
     public static Thread readDynParam;         //поток чтения параметров
-
-  //  public static LocationManager manager;                      //менеджер локаций для работы с GPS
-  //  public static LocationManager managerNet;                   //менеджер локаций для работы с сервисами от гугл
 
     public static boolean connect_device =  false;                //соединение с устройством
     public static boolean connect_server =  false;                //соединение с сервером
@@ -175,7 +166,6 @@ public class InfoPage extends AppCompatActivity {
             // действия при получении сообщений
             public void onReceive(Context context, Intent intent) {
                 param_lat_lon = intent.getStringExtra(PARAM_TASK);
-
             }
         };
         // создаем фильтр для BroadcastReceiver
@@ -199,7 +189,7 @@ public class InfoPage extends AppCompatActivity {
         arch_file = context.getFileStreamPath(FILE_NAME);
 
         //Проверяем число неотправленных пакетов
-        read_cnt_lines();
+        readCntLines();
         if (lines_archive > 0)
         {
             //Делаем видимыми картинку
@@ -213,20 +203,21 @@ public class InfoPage extends AppCompatActivity {
             arch_alert.setVisibility(View.INVISIBLE);
         }
 
-        readDynParam = new Thread(runnable_dyn);
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-              startForegroundService(new Intent(this, GPS_service.class));
-          }
-          else
-          {
-              startService(new Intent(this, GPS_service.class));
-          }
+        readDynParam = new Thread(runnableDynTask);
+        //Делаем так что сервис будет запускаться в любом случае, а не только при сне
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+             startForegroundService(new Intent(this, GPS_service.class));
+         }
+         else
+         {
+             startService(new Intent(this, GPS_service.class));
+         }
         //Обновляем GPS
         Location lastKnownLocation = getLastKnownLocation();
         UpdateLocation(lastKnownLocation);
         //----------------------------------
         //потоки
-        fon_val_refresh_start();
+        fonValRefreshStart();
         if (!Connect.offline) {
 
             readDynParam.start(); //TaskDynRead
@@ -288,14 +279,14 @@ public class InfoPage extends AppCompatActivity {
     static public boolean stop_dyn;     //отключить динамическое чтение
 
     /* Поток чтения динамических параметров */
-    Runnable runnable_dyn = new Runnable() {
+    Runnable runnableDynTask = new Runnable() {
         public void run() {
             try {
                 while (true) {
 
                     if (stop_dyn) return;
 
-                    sending_reg_info("");
+                    sendingInfoToServ("");
                     //Если не пришла команда паузы чтения
                     if (!Connect.read_pause) {
                         if (Connect.State_pack == Connect.RX_pack.COMPLETE )
@@ -329,7 +320,7 @@ public class InfoPage extends AppCompatActivity {
                                     sending_archive = true;
                                     Thread.sleep(60);
                                     Send_Message = Sendind.eArchive;
-                                    sending_reg_info(ReadLastLine(arch_file));      //отправляем на сервер и удалаям строку из файла
+                                    sendingInfoToServ(readLastLine(arch_file));      //отправляем на сервер и удалаям строку из файла
                                     lines_archive--;
                                 }
                                 sending_archive = false;
@@ -352,7 +343,7 @@ public class InfoPage extends AppCompatActivity {
 
         ///Таймер для обновления графического интерфейса в зависимости от показаний
         public  Timer timer;
-        private void fon_val_refresh_start() {
+        private void fonValRefreshStart() {
             timer = new Timer();
 
             timer.scheduleAtFixedRate(new TimerTask() {
@@ -363,7 +354,7 @@ public class InfoPage extends AppCompatActivity {
 
                         @Override
                         public void run() {
-                            UI_update();            //Обновление UI и отправка на сервер
+                            UIUpdate();            //Обновление UI и отправка на сервер
                             Construct_JobInfo();
                             abort_counter++;        //Увеличиваем счетчик сброса
                         }
@@ -375,7 +366,7 @@ public class InfoPage extends AppCompatActivity {
 
 
         //Функция отправки регистрационной информации. Отправляется 1 раз на сервер для авторизациии устройства в системе
-         public static byte[] sending_reg_info(String send_arch)
+         public static byte[] sendingInfoToServ(String send_arch)
          {
              Log.d("На сервер","отправляю");
              int p = 0;
@@ -390,13 +381,13 @@ public class InfoPage extends AppCompatActivity {
                          Connect.myPG.status = "OK";
                      }
                      params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
-                             + "&gps="  + Connect.myPG.gps + "&state=" + Connect.myPG.status
-                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+ gaz1.getText().toString()   //(R.string.h2s)
-                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+ gaz2.getText().toString()   //(R.string.co)
-                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+ gaz3.getText().toString()   //(R.string.o2)
-                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ gaz4.getText().toString()   //(R.string.ch4)
-                             + "&field1="+ Connect.myPG.percent_charge                                               //заряд
-                             + "&key=1562";
+                             + "&gps="  + Connect.myPG.gps + "&state=" + Connect.myPG.status                        //координаты
+                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+ gaz1.getText().toString()  //концентрация по каналу 1 с описателем газа и ед. изм
+                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+ gaz2.getText().toString()  //концентрация по каналу 2 с описателем газа и ед. изм
+                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+ gaz3.getText().toString()  //концентрация по каналу 3 с описателем газа и ед. изм
+                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ gaz4.getText().toString()  //концентрация по каналу 4 с описателем газа и ед. изм
+                             + "&field1="+ Connect.myPG.percent_charge                                              //заряд
+                             + "&key=1562";                                                                         //ключ
 
                  } else if (Send_Message == Sendind.eArchive) {             //если ведется архиваня отправка данных
                      params = send_arch;
@@ -478,7 +469,7 @@ public class InfoPage extends AppCompatActivity {
          }
 
     //Ввод адреса сервера
-    public  void enter_server(View v)
+    public  void enterServer(View v)
     {
     try {
             AlertDialog.Builder alert = new AlertDialog.Builder(InfoPage.this, R.style.AlertDialogCustom);
@@ -520,7 +511,7 @@ public class InfoPage extends AppCompatActivity {
 
     //*******************TEST ZONE***************************
     //Вывод окна для запроса очистки файла
-    public void clear_btn()
+    public void clearBtn()
     {
         try {
             AlertDialog.Builder alert = new AlertDialog.Builder(InfoPage.this, R.style.AlertDialogCustom);
@@ -530,7 +521,7 @@ public class InfoPage extends AppCompatActivity {
 
             alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface dialog, int whichButton) {
-                    Clear_file();
+                    clearFile();
                 }
             });
 
@@ -554,7 +545,7 @@ public class InfoPage extends AppCompatActivity {
 
     }
 
-    public void UI_update()
+    public void UIUpdate()
     {
             String params = "";
             if (!Connect.read_pause) {
@@ -609,7 +600,7 @@ public class InfoPage extends AppCompatActivity {
                 {
                     connect_device = false;
                   //  tstatus.setText(R.string.err_con_dev);            //КОСТЫЛЬ. на планшетах почему то постоянно пишет хоть связь и есть
-                    ShowMessageForDisconnect();
+                    showMessageForDisconnect();
                     Connect.myPG.mBluetoothGatt.connect();
                 }
 
@@ -658,7 +649,7 @@ public class InfoPage extends AppCompatActivity {
                     + "&channel4=<b>" + tconc4.getText().toString() + "</b><br>" + gaz4.getText().toString()   //(R.string.ch4)
                     + "&field1=" + Connect.myPG.percent_charge                                                            //заряд
                     + "&key=1562";
-                    write_to_file(param);      //пишем в файл и увеличиваем количество линий
+                    writeToFile(param);      //пишем в файл и увеличиваем количество линий
                   }
                 cnt_con = false;
             }
@@ -667,12 +658,12 @@ public class InfoPage extends AppCompatActivity {
 
 
     //Выводим уведомление
-    void ShowMessageForDisconnect()
+    void showMessageForDisconnect()
     {
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, GPS_service.CHANNEL_ID)
                         .setSmallIcon(R.drawable.avrr)
-                        .setContentTitle("Внимание")
-                        .setContentText("Потеряна связь с устройством!")
+                        .setContentTitle(getString(R.string.Alert_title))
+                        .setContentText(getString(R.string.con_lost))
                         .setAutoCancel(true)
                         .setPriority(Notification.PRIORITY_MAX);
 
@@ -681,12 +672,12 @@ public class InfoPage extends AppCompatActivity {
 // Show Notification
         NotificationManager notificationManager =
                 (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        notificationManager.notify(196, notification);
+        notificationManager.notify(197, notification);
     }
 
 
     //Запись данных в файл.
-    protected void write_to_file(String text)
+    protected void writeToFile(String text)
     {
         try {
             text += '\n';
@@ -703,7 +694,7 @@ public class InfoPage extends AppCompatActivity {
 
 
     //Открываем файл и смотрим сколько там неотрпавленных пакетов
-    protected void read_cnt_lines()
+    protected void readCntLines()
     {
         try {
             FileInputStream fin = openFileInput(FILE_NAME);
@@ -724,7 +715,7 @@ public class InfoPage extends AppCompatActivity {
     }
 
     //Чтение последней строки файла. А затем ее удаление
-    private static String ReadLastLine(File file) throws FileNotFoundException, IOException {
+    private static String readLastLine(File file) throws FileNotFoundException, IOException {
         String result = null;
         try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
             long startIdx = file.length();
@@ -748,7 +739,7 @@ public class InfoPage extends AppCompatActivity {
 
 
     //Очистка файла
-    protected void Clear_file()
+    protected void clearFile()
     {
      try {
             FileOutputStream fos = null;
@@ -764,12 +755,12 @@ public class InfoPage extends AppCompatActivity {
     int Desc_counter = 0;          //показывает сколько раз вызван дескриптор
 
     //Печать текстового дескриптора катринки
-    public void PrintToast(View view)
+    public void printToast(View view)
     {
         Desc_counter++;
         if (Desc_counter > 8)
         {
-            clear_btn();
+            clearBtn();
             lines_archive = 0;
         }
         Toast.makeText(this, view.getContentDescription(), Toast.LENGTH_SHORT).show();
