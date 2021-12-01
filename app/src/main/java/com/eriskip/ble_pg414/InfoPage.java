@@ -5,6 +5,7 @@ import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationManager;
 
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 
@@ -17,6 +18,8 @@ import android.location.Location;
 import android.location.LocationManager;
 
 import android.os.Build;
+import android.os.IBinder;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AlertDialog;
@@ -24,8 +27,11 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -44,8 +50,9 @@ import java.text.NumberFormat;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ExecutionException;
 
-
+import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 
 
 public class InfoPage extends AppCompatActivity {
@@ -67,6 +74,8 @@ public class InfoPage extends AppCompatActivity {
              charge, errcon, arch_cnt;
     ImageView disconnect, arch_alert;
     //----------------------------------------------------------------------------------------------
+
+    CheckBox cbMoblity;
 
     public static Thread readDynParam;         //поток чтения параметров
 
@@ -117,6 +126,7 @@ public class InfoPage extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         stop_dyn = false;
         setContentView(R.layout.activity_info_page);
         if (!Connect.offline && !Connect.hideMode)
@@ -148,6 +158,8 @@ public class InfoPage extends AppCompatActivity {
         arch_alert = findViewById(R.id.arch_alert);         //иконка алерт у архива
         disconnect = findViewById(R.id.disconnect);         //картинка дисконнекта
 
+        cbMoblity = findViewById(R.id.cbMoblity);
+        if ((Connect.myPG.onoff2 & (1 << 10)) == 0) cbMoblity.setChecked(true);
         /************************Получаем параметры, введенные пользователем**********************/
         Connect.myPG.password    = MainActivity.Password;
         Connect.myPG.login       = MainActivity.Login;
@@ -165,7 +177,9 @@ public class InfoPage extends AppCompatActivity {
         br = new BroadcastReceiver() {
             // действия при получении сообщений
             public void onReceive(Context context, Intent intent) {
-                param_lat_lon = intent.getStringExtra(PARAM_TASK);
+                String coord = intent.getStringExtra(PARAM_TASK);
+                if (coord.length() > 0)                             //Проверяем на длинну. Елси 0, то цель экого пакета просто разбудить активити
+                    param_lat_lon = coord;
             }
         };
         // создаем фильтр для BroadcastReceiver
@@ -222,6 +236,13 @@ public class InfoPage extends AppCompatActivity {
 
             readDynParam.start(); //TaskDynRead
         }
+        cbMoblity.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                setCheck();
+            }
+        });
+
     }
     //Обновление параметров GPS
     static void UpdateLocation(Location location)
@@ -267,7 +288,6 @@ public class InfoPage extends AppCompatActivity {
         }
         //При остановке переводим GPS позиционирование на другой сервис
         super.onPause();
-
     }
 
     //Обработчик кнопки Подробнее
@@ -365,7 +385,7 @@ public class InfoPage extends AppCompatActivity {
 
 
 
-        //Функция отправки регистрационной информации. Отправляется 1 раз на сервер для авторизациии устройства в системе
+        //Функция для отправки данных на сервер. Регистрационнная инфомрация отправыляется один раз, динаическая - периодически, сразу после опроса устрйоства
          public static byte[] sendingInfoToServ(String send_arch)
          {
              Log.d("На сервер","отправляю");
@@ -530,9 +550,7 @@ public class InfoPage extends AppCompatActivity {
                     // Canceled.
                 }
             });
-
             alert.show();
-
         }
         catch (Exception ex)
         {
@@ -567,7 +585,12 @@ public class InfoPage extends AppCompatActivity {
                 //Процент заряда батареи
                 charge.setText(getResources().getString(R.string.Charge) + Connect.myPG.percent_charge + "%");
                 //Статус
-                tstatus.setText(Connect.myPG.Make_State());
+                String tState = Connect.myPG.Make_State();
+                if (Connect.mConnectionState != STATE_CONNECTED) {
+                    tState = getString(R.string.con_lost);
+                    Connect.myPG.status = tState;
+                }
+                tstatus.setText(tState);
                 if (!user_register && connect_server)
                 {
                     errcon.setText(R.string.un_logi);            //если пользователь не зарегистрированный , то выводим ошибку авторизации
@@ -600,7 +623,6 @@ public class InfoPage extends AppCompatActivity {
                 {
                     connect_device = false;
                   //  tstatus.setText(R.string.err_con_dev);            //КОСТЫЛЬ. на планшетах почему то постоянно пишет хоть связь и есть
-                    showMessageForDisconnect();
                     Connect.myPG.mBluetoothGatt.connect();
                 }
 
@@ -657,23 +679,7 @@ public class InfoPage extends AppCompatActivity {
     }
 
 
-    //Выводим уведомление
-    void showMessageForDisconnect()
-    {
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, GPS_service.CHANNEL_ID)
-                        .setSmallIcon(R.drawable.avrr)
-                        .setContentTitle(getString(R.string.Alert_title))
-                        .setContentText(getString(R.string.con_lost))
-                        .setAutoCancel(true)
-                        .setPriority(Notification.PRIORITY_MAX);
 
-        Notification notification = builder.build();
-
-// Show Notification
-        NotificationManager notificationManager =
-                (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        notificationManager.notify(197, notification);
-    }
 
 
     //Запись данных в файл.
@@ -683,7 +689,7 @@ public class InfoPage extends AppCompatActivity {
             text += '\n';
             FileOutputStream fos = null;
             fos = openFileOutput(FILE_NAME, MODE_APPEND);
-            fos.write(text.getBytes());
+            fos.write(text.getBytes("UTF8"));
             lines_archive++;
         }
         catch(IOException ex) {
@@ -767,7 +773,24 @@ public class InfoPage extends AppCompatActivity {
 
     }
     ///
+
+    private void setCheck()
+    {
+        Connect.read_pause = true;
+        Connect.State_pack = Connect.RX_pack.PARAMS;
+        if (!cbMoblity.isChecked())
+        {
+            Connect.myPG.setParamOnOff((short) 0, (short)(1 << 10),'+');
+        }
+        else
+        {
+            Connect.myPG.setParamOnOff((short)0, (short)(1 << 10),'-');
+        }
+
+    }
+
 //-----------------------------------------------------------------------------------------------
 }
+
 
 

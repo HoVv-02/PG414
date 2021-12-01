@@ -24,6 +24,8 @@ import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -47,8 +49,6 @@ public class GPS_service extends Service {
     }
 
     public void onCreate() {
-        createNotificationChannel();            //создаем канал уведомлений, без него не получится содзать увдеомление на 8+ Андроид
-
         Log.d("ssServiceGPS", "GPS_service onStartCommand");
         NotificationCompat.Builder builder = new
                 NotificationCompat.Builder(this, CHANNEL_ID)
@@ -66,19 +66,8 @@ public class GPS_service extends Service {
         listener = new LocationListener() {
             @Override
             public void onLocationChanged(Location location) {
-
-                Intent broadcastIntent = new Intent(InfoPage.BROADCAST_ACTION);                     //интент для широковещательной передачи данных из сервиса в форму активити
-                String lat;                                                                         //широта
-                String longt;                                                                       //долгота
-                lat = location.getLatitude() + "";
-                longt = location.getLongitude() + "";
-                if (lat.length() > 12)
-                    lat = lat.substring(0, 11);                                  //регулируем длинну полученных координат
-                if (longt.length() > 12)
-                    longt = longt.substring(0, 11);                            //регулируем длинну полученных координат
-                broadcastIntent.putExtra(InfoPage.PARAM_TASK, lat + ", " + longt);                //формируем данные для отправки в активити
-                Log.d("GPS", "обновил координаты:" + lat + ", " + longt);
-                sendBroadcast(broadcastIntent);                                                     //отправляем
+                sendLocation(location);
+                Log.d("GPS", "Изменение координат");
             }
 
             @Override
@@ -100,41 +89,49 @@ public class GPS_service extends Service {
         };
         //определяем по какому критерию будет выбираться лучший провайдер
         locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
-         //---Выбираем лучший провайдер. Но исходя из того, что GPS потребляет много, включаем оптимальный режим качество/потребление
-          criteria = new Criteria();
-          criteria.setAccuracy(Criteria.ACCURACY_FINE);
-          provider = locationManager.getBestProvider(criteria, true);
-          UpdateLocation();
+        //---Выбираем лучший провайдер. Но исходя из того, что GPS потребляет много, включаем оптимальный режим качество/потребление
+        criteria = new Criteria();
+        criteria.setAccuracy(Criteria.ACCURACY_FINE);
+        provider = locationManager.getBestProvider(criteria, true);
+        UpdateLocation();
+        startTimer();       //запускаем таймер отправки пустых данных для пробуждения в фоне
     }
 
     //При старте, согласно тербованиям API Android v 8.0+ необходимо оповестить пользователя о работе
     public int onStartCommand(Intent intent, int flags, int startId) {
-
-                                                                 //запускаем в потоке
+        //запускаем в потоке
         int mode = intent.getIntExtra("mode", 1);
-        if (mode == 2)
-        {
+        if (mode == 2) {
             provider = locationManager.getBestProvider(criteria, true);
             UpdateLocation();
-        } else
-        if (mode == 3)
-        {
+        } else if (mode == 3) {
             provider = "network";
             UpdateLocation();
         }
         return super.onStartCommand(intent, flags, startId);
     }
 
+    public Timer timer;
+
+    private void startTimer() {
+        timer = new Timer();
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                sendDeSleeper();
+            }
+        }, 1000, 5000);
+    }
+
     public void onDestroy() {
         super.onDestroy();
-        if(locationManager != null){
+        if (locationManager != null) {
             //noinspection MissingPermission
             locationManager.removeUpdates(listener); //
         }
     }
 
-    private void UpdateLocation()
-    {
+    private void UpdateLocation() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             Log.d("GPS", "Недостаточно разрешенеий для обновления кооординат");
             return;
@@ -142,19 +139,33 @@ public class GPS_service extends Service {
         locationManager.requestLocationUpdates(provider, 5000, minDistance, listener);
     }
 
-    private void createNotificationChannel() {
-        // Create the NotificationChannel, but only on API 26+ because
-        // the NotificationChannel class is new and not in the support library
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            CharSequence name = getString(R.string.channel_name);
-            String description = getString(R.string.channel_description);
-            int importance = NotificationManager.IMPORTANCE_DEFAULT;
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
-            channel.setDescription(description);
-            // Register the channel with the system; you can't change the importance
-            // or other notification behaviors after this
-            NotificationManager notificationManager = getSystemService(NotificationManager.class);
-            notificationManager.createNotificationChannel(channel);
+
+    //Отправка пустого сообщения для того чтобы сработал broadcast reciver который выведет активити на передний план
+    private void sendDeSleeper() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.d("GPS", "Недостаточно разрешенеий для обновления кооординат");
+            return;
+        }
+        Location l = locationManager.getLastKnownLocation(provider);
+        Log.d("GPS", "Отправляем периодические координаты");
+        sendLocation(l);
+    }
+
+    private void sendLocation(Location location)
+    {
+        Intent broadcastIntent = new Intent(InfoPage.BROADCAST_ACTION);                     //интент для широковещательной передачи данных из сервиса в форму активити
+        String lat;                                                                         //широта
+        String longt;                                                                       //долгота
+        if (location != null) {
+            lat = location.getLatitude() + "";
+            longt = location.getLongitude() + "";
+            if (lat.length() > 12)
+                lat = lat.substring(0, 11);                                  //регулируем длинну полученных координат
+            if (longt.length() > 12)
+                longt = longt.substring(0, 11);                            //регулируем длинну полученных координат
+            broadcastIntent.putExtra(InfoPage.PARAM_TASK, lat + ", " + longt);                //формируем данные для отправки в активити
+            Log.d("GPS", "обновил координаты:" + lat + ", " + longt);
+            sendBroadcast(broadcastIntent);                                                     //отправляем
         }
     }
 }

@@ -48,5 +48,5 @@
     <string name="channel_name">Eris notification</string>
     <string name="channel_description">Notification</string>
     <string name="con_lost">Lost connection with device</string>
-
+    <string name="immobility">Immobility sensor</string>
 </resources>

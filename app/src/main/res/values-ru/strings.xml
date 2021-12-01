@@ -48,4 +48,5 @@
     <string name="channel_name">Уведомления Eris</string>
     <string name="channel_description">Уведомления</string>
     <string name="con_lost">Потеряно соединение с устройством</string>
+    <string name="immobility">Детекция неподвижности</string>
 </resources>

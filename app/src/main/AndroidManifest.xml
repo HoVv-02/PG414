@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <uses-feature android:name="android.hardware.location.gps" />
     <uses-feature android:name="android.hardware.location.network" />
@@ -27,10 +27,6 @@
             android:enabled="true"
             android:exported="true"/>
 
-        <receiver
-            android:name=".Alarm"
-            android:process=":remote" />
-
         <activity android:name=".MainActivity"
             android:screenOrientation="portrait">
             <intent-filter>
@@ -44,6 +40,7 @@
             android:screenOrientation="portrait" />
         <activity
             android:name=".InfoPage"
+            android:showOnLockScreen="true"
             android:screenOrientation="portrait" />
     </application>
 

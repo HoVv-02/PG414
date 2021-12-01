@@ -3,6 +3,10 @@ package com.eriskip.ble_pg414;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -20,12 +24,17 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -49,6 +58,7 @@ import java.util.UUID;
 import com.eriskip.ble_pg414.library.PG414;
 import com.eriskip.ble_pg414.library.SampleGattAttributes;
 
+import static android.app.Notification.VISIBILITY_PUBLIC;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
 public class Connect extends AppCompatActivity {
@@ -207,7 +217,7 @@ public class Connect extends AppCompatActivity {
                 }
             }
         };
-
+        createNotificationChannel();        //инициализируем канал уведомлений
         int cnt = 100;
         try {
             //Объекты для работы с BLE
@@ -233,10 +243,8 @@ public class Connect extends AppCompatActivity {
             btScanner = btAdapter.getBluetoothLeScanner();
         }
         catch (Exception ex) {peripheralTextView.setText(R.string.err_adapter);}
-
-
-
     }
+    //-----Конец OnCreate
 
     String currentDevice = "";
 
@@ -345,7 +353,7 @@ public class Connect extends AppCompatActivity {
     private static final int STATE_CONNECTING = 1;
     private static final int STATE_CONNECTED  = 2;
 
-    private int mConnectionState = STATE_DISCONNECT;
+    public static int mConnectionState = STATE_DISCONNECT;
     private BluetoothAdapter mBluetoothAdapter;
 
     public static BluetoothGatt mBluetoothGatt;
@@ -374,6 +382,7 @@ public class Connect extends AppCompatActivity {
             } else if (newState == STATE_DISCONNECTED) {
                 intentAction = ACTION_GATT_DISCONNECTED;
                 mConnectionState = STATE_DISCONNECTED;
+                showMessageForDisconnect();
                 Log.i(TAG, "Disconnected from GATT server.");
                 broadcastUpdate(intentAction);
             }
@@ -496,6 +505,16 @@ public class Connect extends AppCompatActivity {
                         else trueRead = false;
                     break;
 
+                case PARAMS:
+                    read_pause = false;
+                    if (myPG.parseParamOnOff(rec_value))                         //парсим структуру
+                    {
+                        trueRead = true;
+                        State_of_connection = getResources().getString(R.string.read_params_compl);
+                    }
+                    else trueRead = false;
+                    break;
+
                  default: peripheralTextView.setText(R.string.un_package);
             }
             State_pack = RX_pack.COMPLETE;
@@ -577,6 +596,7 @@ public class Connect extends AppCompatActivity {
         DYNPARAM,
         READPARAM,
         COMPLETE,
+        PARAMS,
     }
 
 
@@ -669,6 +689,15 @@ public class Connect extends AppCompatActivity {
                                 Thread.sleep(500);
                                 if (breaker) return;
                             } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
+                            //Читаем переключаемые параметры
+                            do {
+                                myPG.setParamOnOff((short)0, (short)0,'+');
+                                State_pack = RX_pack.PARAMS;
+                                Thread.sleep(delay_module);
+                                myPG.startRead();
+                                Thread.sleep(500);
+                                if (breaker) return;
+                            } while (State_pack != RX_pack.COMPLETE);   //Ждем пока не прочтется
                         }
                         while (!trueRead);
                         offline = false;
@@ -750,6 +779,74 @@ public class Connect extends AppCompatActivity {
                 return;
             }
 
+        }
+    }
+    //-----------------------------------------------------------------
+    //                  Выводим уведомление об отключении
+    //-----------------------------------------------------------------
+    void showMessageForDisconnect()
+    {
+        Intent fullScreenIntent = new Intent(this, InfoPage.class);
+        PendingIntent fullScreenPendingIntent = PendingIntent.getActivity(this, 0,
+                fullScreenIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        Notification notification = null;
+        Uri alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+        long[] pattern = {0, 100, 1000, 200, 2000};
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder builder = new Notification.Builder(this, GPS_service.CHANNEL_ID)
+                    .setSmallIcon(R.drawable.avrr)
+                    .setContentTitle(getString(R.string.Alert_title))
+                    .setContentText(getString(R.string.con_lost))
+                    .setAutoCancel(true)
+                    .setVisibility(VISIBILITY_PUBLIC)
+                    .setCategory(NotificationCompat.CATEGORY_ALARM)
+                    .setFullScreenIntent(fullScreenPendingIntent, true);
+                     notification = builder.build();
+        }
+        else {
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(this, GPS_service.CHANNEL_ID)
+                    .setSmallIcon(R.drawable.avrr)
+                    .setContentTitle(getString(R.string.Alert_title))
+                    .setContentText(getString(R.string.con_lost))
+                    .setAutoCancel(true)
+                    .setVibrate(pattern)
+                    .setSound(alarmSound)
+                    .setPriority(Notification.PRIORITY_MAX)
+                    .setFullScreenIntent(fullScreenPendingIntent, true);
+
+                    notification = builder.build();
+
+        }
+// Show Notification
+        NotificationManager notificationManager =
+                (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        notificationManager.notify(197, notification);
+    }
+
+
+    private void createNotificationChannel() {
+        // Create the NotificationChannel, but only on API 26+ because
+        // the NotificationChannel class is new and not in the support library
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioAttributes attributes = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .build();
+            CharSequence name = getString(R.string.channel_name);
+            String description = getString(R.string.channel_description);
+            int importance = NotificationManager.IMPORTANCE_HIGH;
+            NotificationChannel channel = new NotificationChannel(GPS_service.CHANNEL_ID, name, importance);
+            channel.setDescription(description);
+            Uri alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+            channel.setSound(alarmSound, attributes);
+            channel.setLockscreenVisibility(VISIBILITY_PUBLIC);
+            channel.enableVibration(true);
+            channel.enableLights(true);
+            // Register the channel with the system; you can't change the importance
+            // or other notification behaviors after this
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
         }
     }
 //--     end-file

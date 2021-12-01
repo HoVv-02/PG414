@@ -45,6 +45,9 @@ public class PG414 {
         public int conc2;                         //Текущая концентрация с сенсора 2
         public int conc3;                         //Текущая концентрация с сенсора 3
         public int conc4;                         //Текущая концентрация с сенсора 4
+        /*Переключаемые параметры*/
+        public int onoff1;
+        public int onoff2;
 
         public long zavod_number;       //заводской номер
         public byte percent_charge;     //процент зарядки батареи
@@ -183,6 +186,33 @@ public class PG414 {
             };
 
         /**********ФУНКЦИИ**********/
+
+        //Запрос на чтение динмических параметров
+        public void setParamOnOff(short s1,short s2, char set)
+        {
+            byte[] request = new  byte[10];
+            //формируем запрос
+            request[0] =(byte) 10;             //первым байтом указываем длинну ответа 4 структура 6 обертка комнады
+            request[1] =(byte) 0xFE;
+            request[2] =(byte) 'S';             //Команда
+            request[3] =(byte) set;             //Установить или снять
+            request[4] =(byte) s1;              //Установить или снять
+            request[5] =(byte) (s1 >> 8);       //Установить или снять
+            request[6] =(byte) s2;              //Установить или снять
+            request[7] =(byte) (s2 >> 8);       //Установить или снять
+            request[8] =(byte) '#';              //-------
+            request[9] =(byte) 0x0D;
+            mCharacteristic.setValue(request);                          //заносим в характеристику
+            mBluetoothGatt.writeCharacteristic(mCharacteristic);
+        }
+
+        public boolean parseParamOnOff(byte[] answer)
+        {
+            onoff1 = ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF);
+            onoff2 = ((answer[7]  & 0xFF) << 8) + (answer[6]  & 0xFF);
+            return true;
+        }
+
         //Запрос на чтение динмических параметров
         public void reqDyn()
         {
@@ -201,6 +231,7 @@ public class PG414 {
         //Парсим прочитанные динамические параметры
         public void parseDyn(byte[] answer)
         {
+            if (answer.length < 21) return;
             conc1 = ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF);       //текущая концентрация по 1 каналу
             conc2 = ((answer[7]  & 0xFF) << 8) + (answer[6]  & 0xFF);       //текущая концентрация по 2 каналу
             conc3 = ((answer[9]  & 0xFF) << 8) +  (answer[8] & 0xFF);       //текущая концентрация по 3 каналу
@@ -309,12 +340,15 @@ public class PG414 {
         //Чистим текст от постороних символов
         public void clean_text()
         {
-           for (byte y = 0; y < 4; y++)
-           {
-               gazType[y] = gazType[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
-               gazUnit[y] = gazUnit[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
-           }
+            try {
+                for (byte y = 0; y < 4; y++) {
+                    gazType[y] = gazType[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
+                    gazUnit[y] = gazUnit[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
+                }
+            } catch (Exception ex)
+            {
 
+            }
         }
 
 
