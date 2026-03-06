@@ -225,7 +225,7 @@ public class Connect extends AppCompatActivity {
             btAdapter = btManager.getAdapter();
             Intent enableIntent;
             enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            startActivityForResult(enableIntent,REQUEST_ENABLE_BT);
+            startActivityForResult(enableIntent,REQUEST_ENABLE_BT); 
             while (!btAdapter.isEnabled()) {                                       //пока не включен блютуз выводим сообщение
                 if (bluetooth_en == 1)
                 {

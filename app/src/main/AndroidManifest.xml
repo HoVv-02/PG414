@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" /> <!-- - Добавляем разрешение на использование блютуз, GPS -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -28,6 +29,7 @@
             android:exported="true"/>
 
         <activity android:name=".MainActivity"
+            android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -37,6 +39,7 @@
         </activity>
         <activity
             android:name=".Connect"
+            android:exported="true"
             android:screenOrientation="portrait" />
         <activity
             android:name=".InfoPage"

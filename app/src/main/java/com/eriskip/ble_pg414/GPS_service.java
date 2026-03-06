@@ -108,7 +108,8 @@ public class GPS_service extends Service {
             provider = "network";
             UpdateLocation();
         }
-        return super.onStartCommand(intent, flags, startId);
+//        return super.onStartCommand(intent, flags, startId);
+        return START_NOT_STICKY;
     }
 
     public Timer timer;

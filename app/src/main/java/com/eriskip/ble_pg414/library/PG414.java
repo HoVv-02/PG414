@@ -3,6 +3,7 @@ package com.eriskip.ble_pg414.library;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.os.AsyncTask;
+import android.util.Log;
 
 import java.io.UnsupportedEncodingException;
 
@@ -263,6 +264,8 @@ public class PG414 {
             byte i;
             byte gaz[] = new byte [7]; byte unit[] = new byte [7];
             if (num_struct != answer[2]) return false;
+            Log.d("BLE", "num_struct = " + num_struct +
+                    " answer[2] = " + answer[2]);
             switch (num_struct)
             {
                 case 1:

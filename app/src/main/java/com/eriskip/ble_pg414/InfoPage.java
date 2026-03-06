@@ -53,6 +53,7 @@ import java.util.TimerTask;
 import java.util.concurrent.ExecutionException;
 
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
+import static java.lang.Math.abs;
 
 
 public class InfoPage extends AppCompatActivity {
@@ -111,14 +112,21 @@ public class InfoPage extends AppCompatActivity {
         List<String> providers = mLocationManager.getProviders(true);
         Location bestLocation = null;
         for (String provider : providers) {
-            Location l = mLocationManager.getLastKnownLocation(provider);
-            if (l == null) {
-                continue;
+            try{
+                Location l = mLocationManager.getLastKnownLocation(provider);
+
+                if (l == null) {
+                    continue;
+                }
+                if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
+                    // Found best last known location: %s", l);
+                    bestLocation = l;
+                }
+            } catch (SecurityException e) {
+                e.printStackTrace();
             }
-            if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
-                // Found best last known location: %s", l);
-                bestLocation = l;
-            }
+
+
         }
         return bestLocation;
     }
@@ -388,12 +396,12 @@ public class InfoPage extends AppCompatActivity {
         //Функция для отправки данных на сервер. Регистрационнная инфомрация отправыляется один раз, динаическая - периодически, сразу после опроса устрйоства
          public static byte[] sendingInfoToServ(String send_arch)
          {
-             Log.d("На сервер","отправляю");
+             Log.d("На сервер","отправляю" + connect_server);
              int p = 0;
              if (Send_Message != Sendind.eNone) {
                  String params = "";
                  if (Send_Message == Sendind.eReg_info) {
-                     params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&description=" + Connect.myPG.descriptor + "&key=1562";
+                     params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&description=" + Connect.myPG.descriptor + "&key=1b4c9cba071228296ff61d8938623bc9";
                  } else if (Send_Message == Sendind.eEvent) {
                      if (Connect.myPG.status.length() == 21)  Connect.myPG.status = "OK";
                     //Если статус пустой то шлем OK;
@@ -407,7 +415,7 @@ public class InfoPage extends AppCompatActivity {
                              + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+ gaz3.getText().toString()  //концентрация по каналу 3 с описателем газа и ед. изм
                              + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ gaz4.getText().toString()  //концентрация по каналу 4 с описателем газа и ед. изм
                              + "&field1="+ Connect.myPG.percent_charge                                              //заряд
-                             + "&key=1562";                                                                         //ключ
+                             + "&key=1b4c9cba071228296ff61d8938623bc9";                                                                         //ключ
 
                  } else if (Send_Message == Sendind.eArchive) {             //если ведется архиваня отправка данных
                      params = send_arch;
@@ -419,15 +427,16 @@ public class InfoPage extends AppCompatActivity {
                  try {
                      URL url;
                      if (Send_Message == Sendind.eReg_info)
-                         url = new URL(MainActivity.Server + URL_reg);
+                         url = new URL(MainActivity.Server);
                      else
-                         url = new URL(MainActivity.Server + URL_event);
+                         url = new URL(MainActivity.Server);
                      HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                      conn.setRequestMethod("POST");
                      conn.setDoOutput(true);
                      conn.setDoInput(true);
 
                      conn.setRequestProperty("Content-Length", "" + Integer.toString(params.getBytes().length));
+                     conn.setRequestProperty("erkey", "1b4c9cba071228296ff61d8938623bc9");
                      OutputStream os = conn.getOutputStream();
                      dataz = params.getBytes("UTF-8");
                      os.write(dataz);
@@ -453,6 +462,7 @@ public class InfoPage extends AppCompatActivity {
                      {
                          connect_server = false;
                      }
+                     Log.d("SERVER_RESPONSE", new String(dataz));
                  } catch
                          (Exception ex) {
                      Log.d(TAG, ex.toString());
@@ -578,10 +588,10 @@ public class InfoPage extends AppCompatActivity {
                     nf[j].setGroupingUsed(false);
                 }
                 //В данном коде выводим форматированную     концентрацию                 при этом учитываем          дискретность
-                tconc1.setText(nf[0].format(Connect.myPG.conc1/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[0]*(-1)])));
-                tconc2.setText(nf[1].format(Connect.myPG.conc2/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[1]*(-1)])));
-                tconc3.setText(nf[2].format(Connect.myPG.conc3/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[2]*(-1)])));
-                tconc4.setText(nf[3].format(Connect.myPG.conc4/(float)(Connect.myPG.gazDelitel[Connect.myPG.gazDiskret[3]*(-1)])));
+                tconc1.setText(nf[0].format(Connect.myPG.conc1/(float)(Connect.myPG.gazDelitel[abs(Connect.myPG.gazDiskret[0])])));
+                tconc2.setText(nf[1].format(Connect.myPG.conc2/(float)(Connect.myPG.gazDelitel[abs(Connect.myPG.gazDiskret[1])])));
+                tconc3.setText(nf[2].format(Connect.myPG.conc3/(float)(Connect.myPG.gazDelitel[abs(Connect.myPG.gazDiskret[2])])));
+                tconc4.setText(nf[3].format(Connect.myPG.conc4/(float)(Connect.myPG.gazDelitel[abs(Connect.myPG.gazDiskret[3])])));
                 //Процент заряда батареи
                 charge.setText(getResources().getString(R.string.Charge) + Connect.myPG.percent_charge + "%");
                 //Статус
@@ -623,7 +633,12 @@ public class InfoPage extends AppCompatActivity {
                 {
                     connect_device = false;
                   //  tstatus.setText(R.string.err_con_dev);            //КОСТЫЛЬ. на планшетах почему то постоянно пишет хоть связь и есть
-                    Connect.myPG.mBluetoothGatt.connect();
+                    try{
+                        Connect.myPG.mBluetoothGatt.connect();
+                    } catch (SecurityException e) {
+                        e.printStackTrace();
+                    }
+
                 }
 
                 if (lines_archive > 0)                                   //если есть записи в архиве, то выводим их количество на экран
@@ -670,7 +685,7 @@ public class InfoPage extends AppCompatActivity {
                     + "&channel3=<b>" + tconc3.getText().toString() + "</b><br>" + gaz3.getText().toString()   //(R.string.o2)
                     + "&channel4=<b>" + tconc4.getText().toString() + "</b><br>" + gaz4.getText().toString()   //(R.string.ch4)
                     + "&field1=" + Connect.myPG.percent_charge                                                            //заряд
-                    + "&key=1562";
+                    + "&key=1b4c9cba071228296ff61d8938623bc9";
                     writeToFile(param);      //пишем в файл и увеличиваем количество линий
                   }
                 cnt_con = false;
