@@ -55,6 +55,9 @@ import java.util.concurrent.ExecutionException;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static java.lang.Math.abs;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 
 public class InfoPage extends AppCompatActivity {
 
@@ -401,24 +404,106 @@ public class InfoPage extends AppCompatActivity {
              if (Send_Message != Sendind.eNone) {
                  String params = "";
                  if (Send_Message == Sendind.eReg_info) {
-                     params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&description=" + Connect.myPG.descriptor + "&key=1b4c9cba071228296ff61d8938623bc9";
+
+
+
+                     try {
+
+                         JSONObject json = new JSONObject();
+                         // -------- tags --------
+                         JSONObject tags = new JSONObject();
+                         tags.put("ERdeviceType", "2");
+                         tags.put("ERcodec", "pg-bluetooth");
+
+                         // -------- object --------
+                         JSONObject object = new JSONObject();
+
+                         object.put("zav_number", Connect.myPG.zavod_number);
+                         json.put("object", object);
+
+                         params = json.toString();
+                         Log.d("JSON_REG_SEND", json.toString(2));
+                     } catch (JSONException e) {
+                         e.printStackTrace();
+                     }
+
                  } else if (Send_Message == Sendind.eEvent) {
                      if (Connect.myPG.status.length() == 21)  Connect.myPG.status = "OK";
                     //Если статус пустой то шлем OK;
                      if (Connect.myPG.status.length() < 5) {
                          Connect.myPG.status = "OK";
                      }
-                     params = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
-                             + "&gps="  + Connect.myPG.gps + "&state=" + Connect.myPG.status                        //координаты
-                             + "&channel1=<b>" + tconc1.getText().toString()+"</b><br>"+ gaz1.getText().toString()  //концентрация по каналу 1 с описателем газа и ед. изм
-                             + "&channel2=<b>" + tconc2.getText().toString()+"</b><br>"+ gaz2.getText().toString()  //концентрация по каналу 2 с описателем газа и ед. изм
-                             + "&channel3=<b>" + tconc3.getText().toString()+"</b><br>"+ gaz3.getText().toString()  //концентрация по каналу 3 с описателем газа и ед. изм
-                             + "&channel4=<b>" + tconc4.getText().toString()+"</b><br>"+ gaz4.getText().toString()  //концентрация по каналу 4 с описателем газа и ед. изм
-                             + "&field1="+ Connect.myPG.percent_charge                                              //заряд
-                             + "&key=1b4c9cba071228296ff61d8938623bc9";                                                                         //ключ
 
+
+                     try {
+                         // главный JSON
+                         JSONObject json = new JSONObject();
+
+                         // -------- tags --------
+                         JSONObject tags = new JSONObject();
+                         tags.put("ERdeviceType", "2");
+                         tags.put("ERcodec", "pg-bluetooth");
+
+                         json.put("tags", tags);
+
+                         // -------- object --------
+                         JSONObject object = new JSONObject();
+
+                         object.put("zav_number", Connect.myPG.zavod_number);
+                         object.put("login", Connect.myPG.login);
+                         object.put("password", Connect.myPG.password);
+                         object.put("gps", Connect.myPG.gps);
+                         object.put("state", Connect.myPG.status);
+
+                         // концентрация
+                         object.put("gaz_type1", Connect.myPG.gazType[0]);
+                         object.put("conc1", tconc1.getText().toString());
+                         object.put("measure_unit1", Connect.myPG.gazUnit[0]);
+
+                         object.put("gaz_type2", Connect.myPG.gazType[1]);
+                         object.put("conc2", tconc2.getText().toString());
+                         object.put("measure_unit2", Connect.myPG.gazUnit[1]);
+
+                         object.put("gaz_type3", Connect.myPG.gazType[2]);
+                         object.put("conc3", tconc3.getText().toString());
+                         object.put("measure_unit3", Connect.myPG.gazUnit[2]);
+
+                         object.put("gaz_type4", Connect.myPG.gazType[3]);
+                         object.put("conc4", tconc4.getText().toString());
+                         object.put("measure_unit4", Connect.myPG.gazUnit[3]);
+
+                         object.put("battery_percent", Connect.myPG.percent_charge);
+
+                         json.put("object", object);
+                         params = json.toString();
+
+                         Log.d("JSON_SEND", json.toString(2));
+                     } catch (JSONException e) {
+                         e.printStackTrace();
+                     }
                  } else if (Send_Message == Sendind.eArchive) {             //если ведется архиваня отправка данных
                      params = send_arch;
+
+                     JSONObject json = new JSONObject();
+                     String[] pairs = params.split("&");
+                     try{
+                         for(String pair : pairs){
+                             String[] kv = pair.split("=", 2);
+                             if(kv.length == 2){
+                                 String key = kv[0];
+                                 String value = kv[1];
+                                 json.put(key, value);
+                             }
+                         }
+
+                         params = json.toString();
+                         Log.d("JSON_SEND_ARCHIVE", json.toString(2));
+                     }catch (org.json.JSONException e){
+                         e.printStackTrace();
+                     }
+
+
+
                  }
                  else return null;
                  byte[] dataz = null;
@@ -435,8 +520,9 @@ public class InfoPage extends AppCompatActivity {
                      conn.setDoOutput(true);
                      conn.setDoInput(true);
 
-                     conn.setRequestProperty("Content-Length", "" + Integer.toString(params.getBytes().length));
-                     conn.setRequestProperty("erkey", "1b4c9cba071228296ff61d8938623bc9");
+
+                     conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                     conn.setRequestProperty("ERkey", "1b4c9cba071228296ff61d8938623bc9");
                      OutputStream os = conn.getOutputStream();
                      dataz = params.getBytes("UTF-8");
                      os.write(dataz);
@@ -678,14 +764,13 @@ public class InfoPage extends AppCompatActivity {
             {
             //Работа с файлами архива. В него пишем если нет соединения с сервером, но есть связь с ПГ. Эти данные регистрируем в отдельный файл
              if (!connect_server && connect_device) {
-                    param = "id_type=1&znumber=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
+                    param = "&id_type=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
                     + "&gps=" + Connect.myPG.gps + "&state=" + "Archive: " + Connect.myPG.status
                     + "&channel1=<b>" + tconc1.getText().toString() + "</b><br>" + gaz1.getText().toString()   //(R.string.h2s)
                     + "&channel2=<b>" + tconc2.getText().toString() + "</b><br>" + gaz2.getText().toString()   //(R.string.co)
                     + "&channel3=<b>" + tconc3.getText().toString() + "</b><br>" + gaz3.getText().toString()   //(R.string.o2)
                     + "&channel4=<b>" + tconc4.getText().toString() + "</b><br>" + gaz4.getText().toString()   //(R.string.ch4)
-                    + "&field1=" + Connect.myPG.percent_charge                                                            //заряд
-                    + "&key=1b4c9cba071228296ff61d8938623bc9";
+                    + "&field1=" + Connect.myPG.percent_charge;                                                            //заряд
                     writeToFile(param);      //пишем в файл и увеличиваем количество линий
                   }
                 cnt_con = false;

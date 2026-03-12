@@ -62,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
         // Получаем текстовый описатель
         Description = mSettings.getString(DESCRIPT_SETTINGS,"");
         // Получаем сервер подключения
-        Server = mSettings.getString(SERVER_SETTING,"http://erc.eriskip.ru:8008/api/listeners/packages.php");
+        Server ="http://erc.eriskip.ru:8008/api/listeners/packages.php";
 
         eLogin.setText(Login);
         ePassword.setText(Password);
