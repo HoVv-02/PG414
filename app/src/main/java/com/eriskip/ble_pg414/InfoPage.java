@@ -18,7 +18,9 @@ import android.location.Location;
 import android.location.LocationManager;
 
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
@@ -35,6 +37,7 @@ import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -42,11 +45,14 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -87,11 +93,13 @@ public class InfoPage extends AppCompatActivity {
     public static boolean connect_server =  false;                //соединение с сервером
     public static boolean user_register =   true;                 //подошел ли пароль
     public static boolean has_be_register = false;                //было ли зарегистрированно устройство
+    public static boolean needToSend = false;                       // нужно ли менять пакет
 
     public static int lines_archive = 0;                          //строк в архиве
     public final static String PARAM_TASK = "task";
     public static String param_lat_lon = "none";                  //координаты полученные от сервиса - Широта
 
+    public static int fCnt = 0;                                    //номер пакета
 
 
     public int connToDev = 0;                      // попытки подключения
@@ -102,7 +110,9 @@ public class InfoPage extends AppCompatActivity {
     {
         Log.d("InfoPage","Меня сломали. Гасим сервисы");
         stopService(new Intent(this, GPS_service.class));
-        timer.cancel();
+//        timer.cancel();
+        handler.removeCallbacksAndMessages(null);
+        serverHandler.removeCallbacksAndMessages(null);
         stop_dyn = true;
         super.onDestroy();
 
@@ -242,11 +252,14 @@ public class InfoPage extends AppCompatActivity {
         UpdateLocation(lastKnownLocation);
         //----------------------------------
         //потоки
+
         fonValRefreshStart();
         if (!Connect.offline) {
 
             readDynParam.start(); //TaskDynRead
         }
+
+        startServerTimer();
         cbMoblity.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -266,9 +279,11 @@ public class InfoPage extends AppCompatActivity {
             longt = location.getLongitude() + "";
             if (lat.length() > 12) lat = lat.substring(0, 11);
             if (longt.length() > 12) longt = longt.substring(0, 11);
-            result = lat +  ", " + longt;
             tgps.setText(lat + ", \r" + longt);
+            result = lat + ", " + longt;
             Connect.myPG.gps = result;
+            Connect.myPG.lat = lat;
+            Connect.myPG.lng = longt;
         }
         else
         {
@@ -317,7 +332,7 @@ public class InfoPage extends AppCompatActivity {
 
                     if (stop_dyn) return;
 
-                    sendingInfoToServ("");
+//                    sendingInfoToServ("");
                     //Если не пришла команда паузы чтения
                     if (!Connect.read_pause) {
                         if (Connect.State_pack == Connect.RX_pack.COMPLETE )
@@ -344,21 +359,22 @@ public class InfoPage extends AppCompatActivity {
                         abort_counter = 0;
                         cnt_con = true;
 
-                        try {
-                            //Если есть подключение к серверу
-                            if (connect_server) {
-                                while (lines_archive > 0 && connect_server) {
-                                    sending_archive = true;
-                                    Thread.sleep(60);
-                                    Send_Message = Sendind.eArchive;
-                                    sendingInfoToServ(readLastLine(arch_file));      //отправляем на сервер и удалаям строку из файла
-                                    lines_archive--;
-                                }
-                                sending_archive = false;
-                            }
-                        } catch (IOException | InterruptedException e) {
-                            e.printStackTrace();
-                        }
+//                        try {
+//                            //Если есть подключение к серверу
+//                            if (connect_server) {
+//                                while (lines_archive > 0 && connect_server) {
+//                                    sending_archive = true;
+//                                    Thread.sleep(60);
+//                                    Send_Message = Sendind.eArchive;
+//                                    sendingInfoToServ(readLastLine(arch_file));      //отправляем на сервер и удалаям строку из файла
+//                                    Log.d("ARCHIVE_READ", readLastLine(arch_file));
+//                                    lines_archive--;
+//                                }
+//                                sending_archive = false;
+//                            }
+//                        } catch (IOException | InterruptedException e) {
+//                            e.printStackTrace();
+//                        }
                     }
                 }
 
@@ -369,31 +385,95 @@ public class InfoPage extends AppCompatActivity {
         }
     };
 
+//    public String readLastLine(String fileName) {
+//        String lastLine = "";
+//
+//        try {
+//            FileInputStream fis = openFileInput(fileName);
+//            BufferedReader reader = new BufferedReader(
+//                    new InputStreamReader(fis, StandardCharsets.UTF_8)
+//            );
+//
+//            String line;
+//            while ((line = reader.readLine()) != null) {
+//                lastLine = line;
+//            }
+//
+//            reader.close();
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//
+//        return lastLine;
+//    }
+
         public byte cnt_sec = 0;
         byte abort_counter = 0;
 
         ///Таймер для обновления графического интерфейса в зависимости от показаний
-        public  Timer timer;
-        private void fonValRefreshStart() {
-            timer = new Timer();
+        private Handler handler = new Handler(Looper.getMainLooper());
 
-            timer.scheduleAtFixedRate(new TimerTask() {
+    private void fonValRefreshStart() {
 
-                @Override
-                public void run() {
-                    runOnUiThread(new Runnable() {
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
 
-                        @Override
-                        public void run() {
-                            UIUpdate();            //Обновление UI и отправка на сервер
-                            Construct_JobInfo();
-                            abort_counter++;        //Увеличиваем счетчик сброса
+                UIUpdate();
+                Construct_JobInfo();
+                abort_counter++;
+
+                handler.postDelayed(this, 1500); // повторяем каждые 1.5 сек
+            }
+        }, 2000); // первый запуск через 2 сек
+    }
+
+    private Handler serverHandler = new Handler(Looper.getMainLooper());
+
+
+    private void startServerTimer() {
+
+        serverHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                new Thread(() -> {
+                    try {
+                        //Если есть подключение к серверу
+                        if (connect_server) {
+                            while (lines_archive > 0 && connect_server) {
+                                sending_archive = true;
+                                Thread.sleep(60);
+                                Send_Message = Sendind.eArchive;
+                                sendingInfoToServ(readLastLine(FILE_NAME));      //отправляем на сервер и удалаям строку из файла
+                                Log.d("ARCHIVE_READ", readLastLine(FILE_NAME));
+                                lines_archive--;
+                            }
+                            sending_archive = false;
                         }
-                    });
-                }
-            }, 2000, 1500);
-        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
 
+                    if (needToSend) {
+                        if (!has_be_register) {                         //В зависимости от того была ли регистраци
+                            Log.d("Sending", "eReg_info");
+                            send_message_to_server(Sendind.eReg_info);   //Шлем регистрационные данные
+                        }
+                        else{
+                            Log.d("Sending", "eEvent");
+                            send_message_to_server(Sendind.eEvent);         //Шлем данные о событиях
+                        }
+
+                    }
+
+                    sendingInfoToServ("");
+                }).start();
+
+
+                serverHandler.postDelayed(this, 3000);
+            }
+        }, 3000);
+    }
 
 
         //Функция для отправки данных на сервер. Регистрационнная инфомрация отправыляется один раз, динаическая - периодически, сразу после опроса устрйоства
@@ -410,10 +490,15 @@ public class InfoPage extends AppCompatActivity {
                      try {
 
                          JSONObject json = new JSONObject();
+
+                         // -------- fCount --------
+                         json.put("fCnt", fCnt);
                          // -------- tags --------
                          JSONObject tags = new JSONObject();
                          tags.put("ERdeviceType", "2");
                          tags.put("ERcodec", "pg-bluetooth");
+
+                         json.put("tags", tags);
 
                          // -------- object --------
                          JSONObject object = new JSONObject();
@@ -439,6 +524,9 @@ public class InfoPage extends AppCompatActivity {
                          // главный JSON
                          JSONObject json = new JSONObject();
 
+                         // -------- fCount --------
+                         json.put("fCnt", fCnt);
+
                          // -------- tags --------
                          JSONObject tags = new JSONObject();
                          tags.put("ERdeviceType", "2");
@@ -452,24 +540,46 @@ public class InfoPage extends AppCompatActivity {
                          object.put("zav_number", Connect.myPG.zavod_number);
                          object.put("login", Connect.myPG.login);
                          object.put("password", Connect.myPG.password);
-                         object.put("gps", Connect.myPG.gps);
-                         object.put("state", Connect.myPG.status);
+
+                         JSONObject gps = new JSONObject();
+                         gps.put("lat", Double.parseDouble(Connect.myPG.lat));
+                         gps.put("lng", Double.parseDouble(Connect.myPG.lng));
+                         object.put("gps", gps);
+
+
+
+                         String state = Connect.myPG.status;
+                         int MAX_LENGTH = 200;                  //ограничение длины строки для сервера
+
+                         if (state.length() > MAX_LENGTH) {
+                             state = state.substring(0, MAX_LENGTH);
+                         }
+
+                         object.put("state", state);
 
                          // концентрация
                          object.put("gaz_type1", Connect.myPG.gazType[0]);
-                         object.put("conc1", tconc1.getText().toString());
+                         String text1 = tconc1.getText().toString();
+                         text1 = text1.replace(',', '.');
+                         object.put("conc1", Double.parseDouble(text1));
                          object.put("measure_unit1", Connect.myPG.gazUnit[0]);
 
                          object.put("gaz_type2", Connect.myPG.gazType[1]);
-                         object.put("conc2", tconc2.getText().toString());
+                         String text2 = tconc2.getText().toString();
+                         text2 = text2.replace(',', '.');
+                         object.put("conc2", Double.parseDouble(text2));
                          object.put("measure_unit2", Connect.myPG.gazUnit[1]);
 
                          object.put("gaz_type3", Connect.myPG.gazType[2]);
-                         object.put("conc3", tconc3.getText().toString());
+                         String text3 = tconc3.getText().toString();
+                         text3 = text3.replace(',', '.');
+                         object.put("conc3", Double.parseDouble(text3));
                          object.put("measure_unit3", Connect.myPG.gazUnit[2]);
 
                          object.put("gaz_type4", Connect.myPG.gazType[3]);
-                         object.put("conc4", tconc4.getText().toString());
+                         String text4 = tconc4.getText().toString();
+                         text4 = text4.replace(',', '.');
+                         object.put("conc4", Double.parseDouble(text4));
                          object.put("measure_unit4", Connect.myPG.gazUnit[3]);
 
                          object.put("battery_percent", Connect.myPG.percent_charge);
@@ -484,17 +594,9 @@ public class InfoPage extends AppCompatActivity {
                  } else if (Send_Message == Sendind.eArchive) {             //если ведется архиваня отправка данных
                      params = send_arch;
 
-                     JSONObject json = new JSONObject();
-                     String[] pairs = params.split("&");
                      try{
-                         for(String pair : pairs){
-                             String[] kv = pair.split("=", 2);
-                             if(kv.length == 2){
-                                 String key = kv[0];
-                                 String value = kv[1];
-                                 json.put(key, value);
-                             }
-                         }
+                         JSONObject json = new JSONObject(params);
+                         json.put("fCnt", fCnt);
 
                          params = json.toString();
                          Log.d("JSON_SEND_ARCHIVE", json.toString(2));
@@ -509,13 +611,16 @@ public class InfoPage extends AppCompatActivity {
                  byte[] dataz = null;
                  InputStream is = null;
 
+                 HttpURLConnection conn = null;
+
                  try {
                      URL url;
+                     fCnt++;
                      if (Send_Message == Sendind.eReg_info)
                          url = new URL(MainActivity.Server);
                      else
                          url = new URL(MainActivity.Server);
-                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                     conn = (HttpURLConnection) url.openConnection();
                      conn.setRequestMethod("POST");
                      conn.setDoOutput(true);
                      conn.setDoInput(true);
@@ -527,8 +632,10 @@ public class InfoPage extends AppCompatActivity {
                      dataz = params.getBytes("UTF-8");
                      os.write(dataz);
                      dataz = null;
+                     os.flush();
+                     os.close();
 
-                     conn.connect();
+                     //conn.connect();
                      connect_server = true;
                      int responseCode = conn.getResponseCode();
                      if (responseCode == 200 && Send_Message == Sendind.eReg_info)
@@ -544,21 +651,37 @@ public class InfoPage extends AppCompatActivity {
                          baos.write(buffer, 0, bytesRead);
                      }dataz = baos.toByteArray();
 
-                     if (dataz[1] == 'e' && dataz[2] == 'r')
-                     {
+//                     if (dataz[1] == 'e' && dataz[2] == 'r')
+//                     {
+//                         connect_server = false;
+//                     }
+
+                     String responseStr = new String(dataz, "UTF-8");
+                     JSONObject respJson = new JSONObject(responseStr);
+                     boolean success = respJson.getBoolean("success");
+
+                     if(!success){
                          connect_server = false;
                      }
+                     Log.d("SERVER_URL", MainActivity.Server);
+                     Log.d("HTTP_CODE", String.valueOf(responseCode));
                      Log.d("SERVER_RESPONSE", new String(dataz));
                  } catch
                          (Exception ex) {
-                     Log.d(TAG, ex.toString());
+                     //Log.d(TAG,"ERROR in send_message_to_server: " + ex.toString());
+                     Log.e("DEBUG", "Error sending data", ex);
                  } finally {
                      try {
 
                          if (is != null)
                              is.close();
                      } catch (Exception ex) {
+                         Log.e("DEBUG", "IS close error", ex);
                      }
+
+//                     if (conn != null) {
+//                         conn.disconnect();
+//                     }
                  }
                  Send_Message = Sendind.eNone;
                  if (dataz != null)
@@ -669,8 +792,11 @@ public class InfoPage extends AppCompatActivity {
                 for (byte j =0; j < 4; j++)
                 {
                     nf[j] = NumberFormat.getInstance();
-                    nf[j].setMaximumFractionDigits(Connect.myPG.gazDiskret[j]*(-1));
-                    nf[j].setMinimumFractionDigits(Connect.myPG.gazDiskret[j]*(-1));
+
+                    int digits = Math.abs(Connect.myPG.gazDiskret[j]);
+
+                    nf[j].setMaximumFractionDigits(digits);
+                    nf[j].setMinimumFractionDigits(digits);
                     nf[j].setGroupingUsed(false);
                 }
                 //В данном коде выводим форматированную     концентрацию                 при этом учитываем          дискретность
@@ -706,10 +832,7 @@ public class InfoPage extends AppCompatActivity {
 
                 if (cnt_sec == 5) {
                     cnt_sec = 0;
-                    if (!has_be_register)                               //В зависимости от того была ли регистрация
-                        send_message_to_server(Sendind.eReg_info);      //Шлем регистрационные данные
-                    else
-                        send_message_to_server(Sendind.eEvent);         //Шлем данные о событиях
+                    needToSend = true;
                 }
                 cnt_sec++;
 
@@ -745,10 +868,7 @@ public class InfoPage extends AppCompatActivity {
             {
                 if (cnt_sec == 5) {
                     cnt_sec = 0;
-                    if (!has_be_register)                               //В зависимости от того была ли регистрация
-                        send_message_to_server(Sendind.eReg_info);      //Шлем регистрационные данные
-                    else
-                        send_message_to_server(Sendind.eEvent);         //Шлем данные о событиях
+                    needToSend = true;       //Шлем данные о событиях
                 }
                 cnt_sec++;
             }
@@ -764,14 +884,54 @@ public class InfoPage extends AppCompatActivity {
             {
             //Работа с файлами архива. В него пишем если нет соединения с сервером, но есть связь с ПГ. Эти данные регистрируем в отдельный файл
              if (!connect_server && connect_device) {
-                    param = "&id_type=" + Connect.myPG.zavod_number + "&login=" + Connect.myPG.login + "&password=" + Connect.myPG.password
-                    + "&gps=" + Connect.myPG.gps + "&state=" + "Archive: " + Connect.myPG.status
-                    + "&channel1=<b>" + tconc1.getText().toString() + "</b><br>" + gaz1.getText().toString()   //(R.string.h2s)
-                    + "&channel2=<b>" + tconc2.getText().toString() + "</b><br>" + gaz2.getText().toString()   //(R.string.co)
-                    + "&channel3=<b>" + tconc3.getText().toString() + "</b><br>" + gaz3.getText().toString()   //(R.string.o2)
-                    + "&channel4=<b>" + tconc4.getText().toString() + "</b><br>" + gaz4.getText().toString()   //(R.string.ch4)
-                    + "&field1=" + Connect.myPG.percent_charge;                                                            //заряд
-                    writeToFile(param);      //пишем в файл и увеличиваем количество линий
+                 try {
+                     JSONObject json = new JSONObject();
+
+                     // -------- tags --------
+                     JSONObject tags = new JSONObject();
+                     tags.put("ERdeviceType", "2");
+                     tags.put("ERcodec", "pg-bluetooth");
+                     json.put("tags", tags);
+
+                     // -------- object --------
+                     JSONObject object = new JSONObject();
+                     object.put("zav_number", Connect.myPG.zavod_number);
+                     object.put("login", Connect.myPG.login);
+                     object.put("password", Connect.myPG.password);
+
+                     JSONObject gps = new JSONObject();
+                     gps.put("lat", Double.parseDouble(Connect.myPG.lat));
+                     gps.put("lng", Double.parseDouble(Connect.myPG.lng));
+                     object.put("gps", gps);
+
+                     object.put("state", "Archive: " + Connect.myPG.status);
+
+                     object.put("gaz_type1", Connect.myPG.gazType[0]);
+                     object.put("conc1", Double.parseDouble(tconc1.getText().toString().replace(',', '.')));
+                     object.put("measure_unit1", Connect.myPG.gazUnit[0]);
+
+                     object.put("gaz_type2", Connect.myPG.gazType[1]);
+                     object.put("conc2", Double.parseDouble(tconc2.getText().toString().replace(',', '.')));
+                     object.put("measure_unit2", Connect.myPG.gazUnit[1]);
+
+                     object.put("gaz_type3", Connect.myPG.gazType[2]);
+                     object.put("conc3", Double.parseDouble(tconc3.getText().toString().replace(',', '.')));
+                     object.put("measure_unit3", Connect.myPG.gazUnit[2]);
+
+                     object.put("gaz_type4", Connect.myPG.gazType[3]);
+                     object.put("conc4", Double.parseDouble(tconc4.getText().toString().replace(',', '.')));
+                     object.put("measure_unit4", Connect.myPG.gazUnit[3]);
+
+                     object.put("battery_percent", Connect.myPG.percent_charge);
+
+                     json.put("object", object);
+
+                     // Сохраняем JSON архива без fCnt
+                     writeToFile(json.toString());                                   //пишем в файл и увеличиваем количество линий
+                     Log.d("JSON_ARCHIVE_SAVE", json.toString(2));
+                 } catch (JSONException e) {
+                     e.printStackTrace();
+                 }
                   }
                 cnt_con = false;
             }
@@ -821,21 +981,57 @@ public class InfoPage extends AppCompatActivity {
     }
 
     //Чтение последней строки файла. А затем ее удаление
-    private static String readLastLine(File file) throws FileNotFoundException, IOException {
-        String result = null;
-        try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
-            long startIdx = file.length();
-            while (startIdx >= 0 && (result == null || result.length() == 0)) {
-                raf.seek(startIdx);
-                if (startIdx > 0)
-                    raf.readLine();
-                result = raf.readLine();
-                startIdx--;
+    private String readLastLine(String fileName) {
+        List<String> lines = new ArrayList<>();
+
+        try {
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(openFileInput(fileName), StandardCharsets.UTF_8)
+            );
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lines.add(line);
             }
-            raf.setLength(file.length() - result.length());
+            reader.close();
+
+            if (lines.isEmpty()) return null;
+
+            String lastLine = lines.remove(lines.size() - 1);
+
+            // перезаписываем файл без последней строки
+            FileOutputStream fos = openFileOutput(fileName, MODE_PRIVATE);
+            for (String l : lines) {
+                fos.write((l + "\n").getBytes(StandardCharsets.UTF_8));
+            }
+            fos.close();
+
+            return lastLine;
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        return result;
+
+        return null;
     }
+
+
+
+//    private static String readLastLine(File file) throws FileNotFoundException, IOException {
+//        String result = null;
+//        try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
+//            long startIdx = file.length();
+//            while (startIdx >= 0 && (result == null || result.length() == 0)) {
+//                raf.seek(startIdx);
+//                if (startIdx > 0)
+//                    raf.readLine();
+//                result = raf.readLine();
+//                startIdx--;
+//            }
+//            raf.setLength(file.length() - result.length());
+//        }
+//        return result;
+//    }
 
     //Задать размер файлу
     private  static void SetLen(int size)

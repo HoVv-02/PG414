@@ -6,6 +6,8 @@ import android.os.AsyncTask;
 import android.util.Log;
 
 import java.io.UnsupportedEncodingException;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class PG414 {
 
@@ -62,6 +64,8 @@ public class PG414 {
         public String login;
         public String password;
         public String gps;
+        public String lng;
+        public String lat;
         public String status;
 
         public boolean localeRus;                             //Используется ли русский язык как локализация
@@ -308,23 +312,34 @@ public class PG414 {
         //Переводим текущий статус в текстовый описатель ошибок
         public String Make_State()
         {
-            String result = "";
+            Set<String> errors = new LinkedHashSet<>();
             byte indx_err = 0;
+
             for (byte x = 0; x < 8; x++)
             {
                 for (byte y = 0; y < 8; y++)
                 {
                     if (((state[x] >> y) & 0x01) != 0)
-                    if (localeRus)
-                        if (indx_err < array_of_Errors_RUS.length)
-                        result += array_of_Errors_RUS[indx_err]+"\n";
-                    else
-                        if (indx_err < array_of_Errors_EN.length)
-                        result += array_of_Errors_EN[indx_err]+"\n";
+                    {
+                        if (localeRus)
+                        {
+                            if (indx_err < array_of_Errors_RUS.length)
+                                errors.add(array_of_Errors_RUS[indx_err]);
+                        }
+                        else
+                        {
+                            if (indx_err < array_of_Errors_EN.length)
+                                errors.add(array_of_Errors_EN[indx_err]);
+                        }
+                    }
                     indx_err++;
                 }
             }
-            if (result.length() == 21) result = "OK";   //Убираем время
+
+            String result = String.join("\n", errors);
+
+            if (result.length() == 21)
+                result = "OK";
 
             if (result.length() < 5)
             {
@@ -336,6 +351,7 @@ public class PG414 {
             }
             else
                 p = 10;
+
             status = result;
             return result;
         }
