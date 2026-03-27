@@ -30,6 +30,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
@@ -183,7 +184,7 @@ public class Connect extends AppCompatActivity {
                     }).create();
             aboutDialog.show();
         }
-        checkLocationPermission();          //запрос о работе с месторасположением
+        checkPermissions();          //запрос разрешений
         //Список найденных устройств
         deviceList =  findViewById(R.id.list_devices);
         deviceList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -713,72 +714,116 @@ public class Connect extends AppCompatActivity {
 //Функция запроса разрешений на локацию
     public static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
 
-    public boolean checkLocationPermission() {
+    public boolean checkPermissions() {
+
+        List<String> permissionsNeeded = new ArrayList<>();
+
+        //  Геолокация
         if (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
 
-            // Should we show an explanation?
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
-                    Manifest.permission.ACCESS_FINE_LOCATION)) {
+            permissionsNeeded.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
 
-                // Show an explanation to the user *asynchronously* -- don't block
-                // this thread waiting for the user's response! After the user
-                // sees the explanation, try again to request the permission.
+        //  Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.BLUETOOTH_CONNECT)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                permissionsNeeded.add(Manifest.permission.BLUETOOTH_CONNECT);
+            }
+
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.BLUETOOTH_SCAN)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                permissionsNeeded.add(Manifest.permission.BLUETOOTH_SCAN);
+            }
+        }
+
+        //  До Android 12
+        else {
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.BLUETOOTH)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                permissionsNeeded.add(Manifest.permission.BLUETOOTH);
+            }
+
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.BLUETOOTH_ADMIN)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                permissionsNeeded.add(Manifest.permission.BLUETOOTH_ADMIN);
+            }
+        }
+
+        //  Если есть что запрашивать
+        if (!permissionsNeeded.isEmpty()) {
+
+            // Нужно ли объяснение
+            boolean showRationale = false;
+
+            for (String perm : permissionsNeeded) {
+                if (ActivityCompat.shouldShowRequestPermissionRationale(this, perm)) {
+                    showRationale = true;
+                    break;
+                }
+            }
+
+            if (showRationale) {
                 new AlertDialog.Builder(this)
-                        .setTitle("Заголовок")
-                        .setMessage("Текст")
-                        .setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialogInterface, int i) {
-                                //Prompt the user once explanation has been shown
-                                ActivityCompat.requestPermissions(Connect.this,
-                                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                                        MY_PERMISSIONS_REQUEST_LOCATION);
-                            }
+                        .setTitle("Требуются разрешения")
+                        .setMessage("Для работы Bluetooth и GPS необходимо предоставить разрешения")
+                        .setPositiveButton("OK", (dialog, which) -> {
+                            ActivityCompat.requestPermissions(
+                                    Connect.this,
+                                    permissionsNeeded.toArray(new String[0]),
+                                    MY_PERMISSIONS_REQUEST_LOCATION
+                            );
                         })
                         .create()
                         .show();
-
-
             } else {
-                // No explanation needed, we can request the permission.
-                ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                        MY_PERMISSIONS_REQUEST_LOCATION);
+                ActivityCompat.requestPermissions(
+                        this,
+                        permissionsNeeded.toArray(new String[0]),
+                        MY_PERMISSIONS_REQUEST_LOCATION
+                );
             }
+
             return false;
-        } else {
-            return true;
         }
+
+        return true;
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode,
-                                           String permissions[], int[] grantResults) {
-        switch (requestCode) {
-            case MY_PERMISSIONS_REQUEST_LOCATION: {
-                // If request is cancelled, the result arrays are empty.
-                if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                                           @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
 
-                    // permission was granted, yay! Do the
-                    // location-related task you need to do.
-                    if (ContextCompat.checkSelfPermission(this,
-                            Manifest.permission.ACCESS_FINE_LOCATION)
-                            == PackageManager.PERMISSION_GRANTED) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-                    }
+        if (requestCode == MY_PERMISSIONS_REQUEST_LOCATION) {
 
-                } else {
+            boolean allGranted = true;
 
-                    // permission denied, boo! Disable the
-                    // functionality that depends on this permission.
-
+            for (int res : grantResults) {
+                if (res != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
                 }
-                return;
             }
 
+            if (allGranted) {
+                Log.d("PERMISSION", "Все разрешения выданы");
+            } else {
+                Log.d("PERMISSION", "Не все разрешения выданы");
+            }
         }
     }
     //-----------------------------------------------------------------

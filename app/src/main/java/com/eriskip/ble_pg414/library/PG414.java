@@ -6,6 +6,7 @@ import android.os.AsyncTask;
 import android.util.Log;
 
 import java.io.UnsupportedEncodingException;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -265,11 +266,16 @@ public class PG414 {
 
         //Парсим конкретную структуру с номером "num_struct"
         public boolean parseParam(byte[] answer, byte num_struct) throws UnsupportedEncodingException {
+            Log.d("RAW_BYTES", Arrays.toString(answer));
+            Log.d("RAW_TEXT", new String(answer));
             byte i;
             byte gaz[] = new byte [7]; byte unit[] = new byte [7];
-            if (num_struct != answer[2]) return false;
-            Log.d("BLE", "num_struct = " + num_struct +
-                    " answer[2] = " + answer[2]);
+            if (num_struct != answer[2]) {
+                Log.e("PARSE_ERROR",
+                        "Несовпадение структуры! num_struct=" + num_struct +
+                                " answer[2]=" + answer[2]);
+                return false;
+            }
             switch (num_struct)
             {
                 case 1:
@@ -321,6 +327,7 @@ public class PG414 {
                 {
                     if (((state[x] >> y) & 0x01) != 0)
                     {
+                        Log.d("STATE_MATCH", "bit=" + indx_err);
                         if (localeRus)
                         {
                             if (indx_err < array_of_Errors_RUS.length)

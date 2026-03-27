@@ -53,6 +53,8 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -89,11 +91,17 @@ public class InfoPage extends AppCompatActivity {
 
     public static Thread readDynParam;         //поток чтения параметров
 
-    public static boolean connect_device =  false;                //соединение с устройством
+    public static volatile boolean connect_device =  false;                //соединение с устройством
     public static boolean connect_server =  false;                //соединение с сервером
     public static boolean user_register =   true;                 //подошел ли пароль
     public static boolean has_be_register = false;                //было ли зарегистрированно устройство
     public static boolean needToSend = false;                       // нужно ли менять пакет
+    private boolean alarmMode = false;                              // аварийный режим, сработка порога
+    private boolean lastAlarmState = false;                         // штатный режим
+
+    private boolean isAlarm(String state) {
+        return state != null && state.contains("Порог");
+    }
 
     public static int lines_archive = 0;                          //строк в архиве
     public final static String PARAM_TASK = "task";
@@ -331,8 +339,6 @@ public class InfoPage extends AppCompatActivity {
                 while (true) {
 
                     if (stop_dyn) return;
-
-//                    sendingInfoToServ("");
                     //Если не пришла команда паузы чтения
                     if (!Connect.read_pause) {
                         if (Connect.State_pack == Connect.RX_pack.COMPLETE )
@@ -359,22 +365,6 @@ public class InfoPage extends AppCompatActivity {
                         abort_counter = 0;
                         cnt_con = true;
 
-//                        try {
-//                            //Если есть подключение к серверу
-//                            if (connect_server) {
-//                                while (lines_archive > 0 && connect_server) {
-//                                    sending_archive = true;
-//                                    Thread.sleep(60);
-//                                    Send_Message = Sendind.eArchive;
-//                                    sendingInfoToServ(readLastLine(arch_file));      //отправляем на сервер и удалаям строку из файла
-//                                    Log.d("ARCHIVE_READ", readLastLine(arch_file));
-//                                    lines_archive--;
-//                                }
-//                                sending_archive = false;
-//                            }
-//                        } catch (IOException | InterruptedException e) {
-//                            e.printStackTrace();
-//                        }
                     }
                 }
 
@@ -385,27 +375,7 @@ public class InfoPage extends AppCompatActivity {
         }
     };
 
-//    public String readLastLine(String fileName) {
-//        String lastLine = "";
-//
-//        try {
-//            FileInputStream fis = openFileInput(fileName);
-//            BufferedReader reader = new BufferedReader(
-//                    new InputStreamReader(fis, StandardCharsets.UTF_8)
-//            );
-//
-//            String line;
-//            while ((line = reader.readLine()) != null) {
-//                lastLine = line;
-//            }
-//
-//            reader.close();
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-//
-//        return lastLine;
-//    }
+
 
         public byte cnt_sec = 0;
         byte abort_counter = 0;
@@ -436,7 +406,40 @@ public class InfoPage extends AppCompatActivity {
         serverHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
+                Log.d("SERVER_TIMER", "Соединение с устройством" + connect_device);
+
+                boolean currentAlarm = isAlarm(Connect.myPG.status);
+                Log.d("SERVER_TIMER", "Current state: " + Connect.myPG.status);
+                Log.d("SERVER_TIMER", "Alarm now: " + currentAlarm + ", Alarm before: " + lastAlarmState);
+
+                if (currentAlarm && !lastAlarmState) {                  //переход в аварийный режим
+                    Log.d("ALARM", "ВХОД В АВАРИЙНЫЙ РЕЖИМ");
+                    alarmMode = true;
+
+                    // немедленная отправка
+                    new Thread(() -> {
+                        if(connect_device){
+                            Log.d("SEND", "Немедленная отправка");
+                            Send_Message = Sendind.eEvent;
+                            sendingInfoToServ("");
+                        }
+
+                    }).start();
+                }
+
+                if (!currentAlarm && lastAlarmState) {                  //переход в штатный режим
+                    Log.d("ALARM", "ВОЗВРАТ В ШТАТНЫЙ РЕЖИМ");
+                    alarmMode = false;
+                }
+
+                lastAlarmState = currentAlarm;
+
+
                 new Thread(() -> {
+                    if (!connect_device) {
+                        Log.d("SEND", "Устройство отключено — отправка отменена");
+                        return;
+                    }
                     try {
                         //Если есть подключение к серверу
                         if (connect_server) {
@@ -469,8 +472,10 @@ public class InfoPage extends AppCompatActivity {
                     sendingInfoToServ("");
                 }).start();
 
+                long delay = alarmMode ? 3000 : 30000;
 
-                serverHandler.postDelayed(this, 3000);
+
+                serverHandler.postDelayed(this, delay);
             }
         }, 3000);
     }
@@ -479,6 +484,10 @@ public class InfoPage extends AppCompatActivity {
         //Функция для отправки данных на сервер. Регистрационнная инфомрация отправыляется один раз, динаическая - периодически, сразу после опроса устрйоства
          public static byte[] sendingInfoToServ(String send_arch)
          {
+             if (!connect_device) {
+                 Log.d("SEND", "Нет устройства — выход");
+                 return null;
+             }
              Log.d("На сервер","отправляю" + connect_server);
              int p = 0;
              if (Send_Message != Sendind.eNone) {
@@ -548,14 +557,7 @@ public class InfoPage extends AppCompatActivity {
 
 
 
-                         String state = Connect.myPG.status;
-                         int MAX_LENGTH = 200;                  //ограничение длины строки для сервера
-
-                         if (state.length() > MAX_LENGTH) {
-                             state = state.substring(0, MAX_LENGTH);
-                         }
-
-                         object.put("state", state);
+                         object.put("state", prepareState(Connect.myPG.status));
 
                          // концентрация
                          object.put("gaz_type1", Connect.myPG.gazType[0]);
@@ -629,6 +631,10 @@ public class InfoPage extends AppCompatActivity {
                      conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
                      conn.setRequestProperty("ERkey", "1b4c9cba071228296ff61d8938623bc9");
                      OutputStream os = conn.getOutputStream();
+                     if (!connect_device) {
+                         Log.d("SEND", "Отмена перед отправкой");
+                         return null;
+                     }
                      dataz = params.getBytes("UTF-8");
                      os.write(dataz);
                      dataz = null;
@@ -700,6 +706,34 @@ public class InfoPage extends AppCompatActivity {
 
          }
 
+    private static String prepareState(String state) {
+
+        String[] lines = state.split("\n");
+
+        // уникальные строки
+        LinkedHashSet<String> unique = new LinkedHashSet<>(Arrays.asList(lines));
+
+        StringBuilder result = new StringBuilder();
+
+        int MAX_LINES = 3;
+        int count = 0;
+
+        for (String line : unique) {
+
+            line = line.trim();
+
+            // пропускаем мусор
+            if (line.isEmpty() || line.equals("НЕ ИСПОЛЬЗУЕТСЯ"))
+                continue;
+
+            result.append(line).append("\n");
+
+            count++;
+            if (count >= MAX_LINES) break;
+        }
+
+        return result.toString().trim();
+    }
 
 
          public void send_message_to_server(Sendind parametr)
@@ -1072,16 +1106,19 @@ public class InfoPage extends AppCompatActivity {
 
     private void setCheck()
     {
-        Connect.read_pause = true;
-        Connect.State_pack = Connect.RX_pack.PARAMS;
-        if (!cbMoblity.isChecked())
-        {
-            Connect.myPG.setParamOnOff((short) 0, (short)(1 << 10),'+');
+        if(!Connect.offline && !Connect.hideMode){
+            Connect.read_pause = true;
+            Connect.State_pack = Connect.RX_pack.PARAMS;
+            if (!cbMoblity.isChecked())
+            {
+                Connect.myPG.setParamOnOff((short) 0, (short)(1 << 10),'+');
+            }
+            else
+            {
+                Connect.myPG.setParamOnOff((short)0, (short)(1 << 10),'-');
+            }
         }
-        else
-        {
-            Connect.myPG.setParamOnOff((short)0, (short)(1 << 10),'-');
-        }
+
 
     }
 
