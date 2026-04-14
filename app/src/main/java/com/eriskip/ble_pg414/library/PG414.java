@@ -44,7 +44,7 @@ public class PG414 {
         public byte mode_unit;          //Режим отображения единиц        //0 - одинарный редим отображения. 1 - двойной режим отображения
 
         /*Динамические данные*/
-        public byte[]  state = new byte[8];       //Состояние устройства
+        public byte[]  state = new byte[4];       //Состояние устройства
         public int conc1;                         //Текущая концентрация с сенсора 1
         public int conc2;                         //Текущая концентрация с сенсора 2
         public int conc3;                         //Текущая концентрация с сенсора 3
@@ -97,98 +97,75 @@ public class PG414 {
 
         public String[] array_of_Errors_RUS =
                 {
-                        "Низкий заряд",
-                        "Критический заряд",
-                        "Порог 1 - Электрохим. 1",
-                        "Порог 2 - Электрохим. 1",
-                        "Порог 1 - Электрохим. 2",
-                        "Порог 2 - Электрохим. 1",
-                        "Порог 1 - Кислород",
-                        "Порог 2 - Кислород",
-                        "Порог 1 - Пеллистор/мипекс",
-                        "Порог 2 - Пеллистор/мипекс",
-                        "НЕ ИСПОЛЬЗУЕТСЯ",
-                        "Ошибка при чтении параметров из флеша",
-                        "Время не установлено",
-                        "Битая конфиг. таблица сенсора",
-                        "Битая конфиг. таблица сенсора",
-                        "Битая конфиг. таблица сенсора",
-                        "Битая конфиг. таблица сенсора",
-                        "Ошибка АЦП элх. сенсора",
-                        "Ошибка конфигурации LMP",
-                        "Ошибка АЦП элх. сенсора",
-                        "Ошибка конфигурации LMP",
-                        "Ошибка АЦП элх. сенсора",
-                        "Ошибка АЦП элх. сенсора",
-                        "Ошибка АЦП элх. сенсора",
-                        "I2C не работает",
-                        "I2C не работает",
-                        "НЕ ИСПОЛЬЗУЕТСЯ",
-                        "Превышение диапазона",
-                        "Превышение диапазона",
-                        "Превышение диапазона",
-                        "Превышение диапазона",
-                        "Ошибка неисправности И2Ц",
-                        "Ошибка неисправности И2Ц",
-                        "Ошибка неисправности И2Ц",
-                        "Ошибка неисправности И2Ц",
-                        "Ошибка неисправности И2Ц",
-                        "Ошибка неисправности И2Ц",
-                        "Ошибка неисправности И2Ц",
-                        "Ошибка при чтении из флеш",
-                        "НЕ ИСПОЛЬЗУЕТСЯ",
-                        "Датчик темп. неисправен",
-                        "Датчик давления неисправен",
-                        "Ошибка при считывании лога",
-                        "Ошибка модуля BLE"
+                        "Порог 1 - Сенсор 1",                                                       //0
+                        "Порог 2 - Сенсор 1",                                                       //1
+                        "Превышение диапазона - Сенсор 1",                                          //2
+                        "Порог 1 - Сенсор 2",                                                       //3
+                        "Порог 2 - Сенсор 2",                                                       //4
+                        "Превышение диапазона - Сенсор 2",                                          //5
+                        "Порог 1 - Сенсор 3",                                                       //6
+                        "Порог 2 - Сенсор 3",                                                       //7
+                        "Превышение диапазона - Сенсор 3",                                          //8
+                        "Порог 1 - Сенсор 4",                                                       //9
+                        "Порог 2 - Сенсор 4",                                                       //10
+                        "Превышение диапазона - Сенсор 4",                                          //11
+                        "Порог 1 - Сенсор 5",                                                       //12
+                        "Порог 2 - Сенсор 5",                                                       //13
+                        "Превышение диапазона - Сенсор 5",                                          //14
+                        "Человек без движения",                                                     //15
+                        "Низкий заряд батареи",                                                     //16
+                        "Время не установлено",                                                     //17
+                        "Ошибка связи с АЦП",                                                       //18
+                        "Ошибка связи с АЦП2",                                                      //19
+                        "Ошибка связи с ЛМП1",                                                      //20
+                        "Ошибка связи с ЛМП2",                                                      //21
+                        "Ошибка связи с ЛМП3",                                                      //22
+                        "Температура вышла за диапазон. Используется нормальная температура 32 °C", //23
+                        "Давление вышло за диапазон. Используется нормальное давление - 101,3 кПа", //24
+                        "Чистая флешка архива или CRC flash",                                       //25
+                        "Ошибка радиомодуля",                                                       //26
+                        "Падение человека",                                                         //27
+                        "Ошибка платы питания, пин PWGD",                                           //28
+                        "Ошибка акселер",                                                           //29
+                        "Неисправность сенсора",                                                    //30
+                        "Ошибка расширителя"                                                        //31
+
 
                 };
     public String[] array_of_Errors_EN =
             {
+                    "Alarm 1 - Sensor 1",
+                    "Alarm 2 - Sensor 1",
+                    "Over range - Sensor 1",
+                    "Alarm 1 - Sensor 2",
+                    "Alarm 2 - Sensor 2",
+                    "Over range - Sensor 2",
+                    "Alarm 1 - Sensor 3",
+                    "Alarm 2 - Sensor 3",
+                    "Over range - Sensor 3",
+                    "Alarm 1 - Sensor 4",
+                    "Alarm 2 - Sensor 4",
+                    "Over range - Sensor 4",
+                    "Alarm 1 - Sensor 5",
+                    "Alarm 2 - Sensor 5",
+                    "Over range - Sensor 5",
+                    "Person without movement",
                     "Low charge",
-                    "Critical charge",
-                    "Alarm 1 - EC 1",
-                    "Alarm 2 - EC. 1",
-                    "Alarm 1 - EC. 2",
-                    "Alarm 2 - EC. 1",
-                    "Alarm 1 - Oxygen",
-                    "Alarm 2 - Oxygen",
-                    "Alarm 1 - Pellistor/Mipex",
-                    "Alarm 2 - Pellistor/Mipex",
-                    "NOT USED",
-                    "Error flash reading",
                     "Time not set",
-                    "Error sensor table",
-                    "Error sensor table",
-                    "Error sensor table",
-                    "Error sensor table",
-                    "DAC error EC sensors",
-                    "Error config LMP",
-                    "DAC error EC sensors",
-                    "Error config  LMP",
-                    "Error DAC EC sensors",
-                    "Error DAC EC sensors",
-                    "Error DAC EC sensors",
-                    "I2C not work",
-                    "I2C not work",
-                    "NOT USED",
-                    "Over range",
-                    "Over range",
-                    "Over range",
-                    "Over range",
-                    "Error I2C",
-                    "Error I2C",
-                    "Error I2C",
-                    "Error I2C",
-                    "Error I2C",
-                    "Error I2C",
-                    "Error I2C",
-                    "Error flash reading",
-                    "NOT USED",
-                    "Temp sensor defective",
-                    "Pressure sensor defective",
-                    "Error reading log",
-                    "Error module BLE"
+                    "DAC communication error",
+                    "DAC2 communication error",
+                    "LMP1 communication error",
+                    "LMP2 communication error",
+                    "LMP3 communication error",
+                    "The temperature is out of range. The normal temperature is 32°C.",
+                    "The pressure is out of range. The normal pressure is 101.3 kPa.",
+                    "A clean flash drive or CRC flash drive",
+                    "Radio module error",
+                    "Person fell",
+                    "Power board error, pin PWGD",
+                    "Accelerometer error",
+                    "Sensor malfunction",
+                    "Extender error"
             };
 
         /**********ФУНКЦИИ**********/
@@ -242,7 +219,7 @@ public class PG414 {
             conc2 = ((answer[7]  & 0xFF) << 8) + (answer[6]  & 0xFF);       //текущая концентрация по 2 каналу
             conc3 = ((answer[9]  & 0xFF) << 8) +  (answer[8] & 0xFF);       //текущая концентрация по 3 каналу
             conc4 = ((answer[11] & 0xFF) << 8) +  (answer[10] & 0xFF);      //текущая концентрация по 4 каналу
-            for(byte x = 0; x < 8; x++)
+            for(byte x = 0; x < 4; x++)
             {
                 state[x] = answer[12 + x];
             }
@@ -264,54 +241,89 @@ public class PG414 {
             mBluetoothGatt.writeCharacteristic(mCharacteristic);
         }
 
+//        определяем формат пакета
+    private int detectPacketOffset(byte[] answer) {
+
+        // Вариант 1 — старый формат (структура сразу в [2])
+        if (answer.length > 3 && (answer[2] == 1 || answer[2] == 2)) {
+            return 0;
+        }
+
+        // Вариант 2 — ищем struct внутри пакета
+        for (int i = 0; i < answer.length; i++) {
+            if (answer[i] == 1 || answer[i] == 2) {
+                return i - 2; // приводим к "старой" структуре
+            }
+        }
+
+        // если вообще не нашли
+        return -1;
+    }
+
         //Парсим конкретную структуру с номером "num_struct"
         public boolean parseParam(byte[] answer, byte num_struct) throws UnsupportedEncodingException {
             Log.d("RAW_BYTES", Arrays.toString(answer));
             Log.d("RAW_TEXT", new String(answer));
-            byte i;
-            byte gaz[] = new byte [7]; byte unit[] = new byte [7];
-            if (num_struct != answer[2]) {
-                Log.e("PARSE_ERROR",
-                        "Несовпадение структуры! num_struct=" + num_struct +
-                                " answer[2]=" + answer[2]);
+            int shift = detectPacketOffset(answer);
+
+            if (shift < 0) {
+                Log.e("PARSE", "Не удалось определить формат пакета");
                 return false;
             }
-            switch (num_struct)
-            {
-                case 1:
-                            i = 8;
-                                 zavod_number = (((answer[7]  & 0xFF) << 24) + ((answer[6]  & 0xFF) << 16) + ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF)) & 0xFFFFFFFFl;
-                            for (byte x = 0; x < 4; x++) gazDiskret[x] = answer[i++];
-                            for (byte x = 0; x < 2; x++)
-                            {
-                                for (byte y = 0; y < 7; y++) {
-                                    gaz[y] = answer[i++];
-                                }
-                                for (byte z = 0; z < 7; z++) {
-                                    unit[z] = answer[i++];
-                                }
 
-                                gazType[x] = new String(gaz, "Windows-1251");
-                                gazUnit[x] = new String(unit, "Windows-1251");
-                            }
+            int structIndex = shift + 2;
+
+            if (answer.length <= structIndex || answer[structIndex] != num_struct) {
+                Log.e("PARSE", "Структура не совпадает");
+                return false;
+            }
+
+            byte i;
+
+            byte[] gaz = new byte[7];
+            byte[] unit = new byte[7];
+
+            switch (num_struct) {
+
+                case 1:
+                    i = (byte)(shift + 8);
+
+                    // универсальный парсинг номера
+                    long parsed =
+                            ((answer[shift + 7] & 0xFF) << 24) |
+                                    ((answer[shift + 6] & 0xFF) << 16) |
+                                    ((answer[shift + 5] & 0xFF) << 8) |
+                                    (answer[shift + 4] & 0xFF);
+
+                    if (parsed != 0) {
+                        zavod_number = parsed;
+                    }
+
+                    // газы
+                    for (byte x = 0; x < 4; x++) gazDiskret[x] = answer[i++];
+
+                    for (byte x = 0; x < 2; x++) {
+                        for (byte y = 0; y < 7; y++) gaz[y] = answer[i++];
+                        for (byte z = 0; z < 7; z++) unit[z] = answer[i++];
+
+                        gazType[x] = new String(gaz, "Windows-1251").trim();
+                        gazUnit[x] = new String(unit, "Windows-1251").trim();
+                    }
                     break;
 
                 case 2:
-                    i = 4;
-                    for (byte x = 2; x < 4; x++)
-                    {
-                        for (byte y = 0; y < 7; y++) {
-                            gaz[y] = answer[i++];
-                        }
-                        for (byte z = 0; z < 7; z++) {
-                            unit[z] = answer[i++];
-                        }
+                    i = (byte)(shift + 4);
 
-                        gazType[x] = new String(gaz, "Windows-1251");
-                        gazUnit[x] = new String(unit, "Windows-1251");
+                    for (byte x = 2; x < 4; x++) {
+                        for (byte y = 0; y < 7; y++) gaz[y] = answer[i++];
+                        for (byte z = 0; z < 7; z++) unit[z] = answer[i++];
+
+                        gazType[x] = new String(gaz, "Windows-1251").trim();
+                        gazUnit[x] = new String(unit, "Windows-1251").trim();
                     }
                     break;
             }
+
             return true;
         }
     int p = 0;
@@ -319,49 +331,46 @@ public class PG414 {
         public String Make_State()
         {
             Set<String> errors = new LinkedHashSet<>();
-            byte indx_err = 0;
 
-            for (byte x = 0; x < 8; x++)
+            int err = getErrorBits();
+
+
+            for (int i = 0; i < 32; i++)
             {
-                for (byte y = 0; y < 8; y++)
+                if ((err & (1 << i)) != 0)
                 {
-                    if (((state[x] >> y) & 0x01) != 0)
-                    {
-                        Log.d("STATE_MATCH", "bit=" + indx_err);
-                        if (localeRus)
+                    if(localeRus){
+                        if (i < array_of_Errors_RUS.length)
                         {
-                            if (indx_err < array_of_Errors_RUS.length)
-                                errors.add(array_of_Errors_RUS[indx_err]);
+                            errors.add(array_of_Errors_RUS[i]);
                         }
-                        else
+                    }else{
+                        if(i < array_of_Errors_EN.length)
                         {
-                            if (indx_err < array_of_Errors_EN.length)
-                                errors.add(array_of_Errors_EN[indx_err]);
+                            errors.add(array_of_Errors_EN[i]);
                         }
                     }
-                    indx_err++;
+
                 }
             }
 
-            String result = String.join("\n", errors);
-
-            if (result.length() == 21)
-                result = "OK";
-
-            if (result.length() < 5)
+            if (errors.isEmpty())
             {
-                p--;
-                if (p <= 0)
-                    result = "OK";
-                else
-                    result = "Сработка порогов";
+                status = "OK";
+                return status;
             }
-            else
-                p = 10;
 
+            String result = String.join("\n", errors);
             status = result;
             return result;
         }
+
+    public int getErrorBits() {
+        return (state[0] & 0xFF) |
+                ((state[1] & 0xFF) << 8) |
+                ((state[2] & 0xFF) << 16) |
+                ((state[3] & 0xFF) << 24);
+    }
 
         //Чистим текст от постороних символов
         public void clean_text()

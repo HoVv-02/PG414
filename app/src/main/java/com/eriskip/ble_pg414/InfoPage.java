@@ -99,8 +99,48 @@ public class InfoPage extends AppCompatActivity {
     private boolean alarmMode = false;                              // аварийный режим, сработка порога
     private boolean lastAlarmState = false;                         // штатный режим
 
-    private boolean isAlarm(String state) {
-        return state != null && state.contains("Порог");
+    private boolean isAlarm(int err) {
+        if (err == 0) return false;
+
+        // проверяем только нужные биты
+        return checkBit(err, 0)  || // Порог 1 - Сенсор 1
+                checkBit(err, 1)  ||
+                checkBit(err, 2)  || // Превышение диапазона
+                checkBit(err, 3)  ||
+                checkBit(err, 4)  ||
+                checkBit(err, 5)  ||
+                checkBit(err, 6)  ||
+                checkBit(err, 7)  ||
+                checkBit(err, 8)  ||
+                checkBit(err, 9)  ||
+                checkBit(err,10)  ||
+                checkBit(err,11)  ||
+                checkBit(err,12)  ||
+                checkBit(err,13)  ||
+                checkBit(err,14)  ||
+
+                checkBit(err,23)  || // Температура
+                checkBit(err,24)  || // Давление
+
+                checkBit(err,27)  || // Падение человека
+
+                checkBit(err,30);    // Неисправность сенсора
+    }
+
+//    private final int[] CRITICAL_BITS = {
+//            0,1,2,   // Сенсор 1
+//            3,4,5,   // Сенсор 2
+//            6,7,8,   // Сенсор 3
+//            9,10,11, // Сенсор 4
+//            12,13,14,// Сенсор 5
+//
+//            15,      // Человек без движения
+//            23,24,   // Температура / давление
+//            27,      // Падение человека
+//            30       // Неисправность сенсора
+//    };
+    private boolean checkBit(int err, int bit) {
+        return (err & (1 << bit)) != 0;
     }
 
     public static int lines_archive = 0;                          //строк в архиве
@@ -408,7 +448,8 @@ public class InfoPage extends AppCompatActivity {
             public void run() {
                 Log.d("SERVER_TIMER", "Соединение с устройством" + connect_device);
 
-                boolean currentAlarm = isAlarm(Connect.myPG.status);
+                int err = Connect.myPG.getErrorBits();
+                boolean currentAlarm = isAlarm(err);
                 Log.d("SERVER_TIMER", "Current state: " + Connect.myPG.status);
                 Log.d("SERVER_TIMER", "Alarm now: " + currentAlarm + ", Alarm before: " + lastAlarmState);
 
@@ -629,7 +670,7 @@ public class InfoPage extends AppCompatActivity {
 
 
                      conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                     conn.setRequestProperty("ERkey", "1b4c9cba071228296ff61d8938623bc9");
+                     conn.setRequestProperty("ERkey", "c0b96c2589a63163b8bc2bf94adc7cd6");
                      OutputStream os = conn.getOutputStream();
                      if (!connect_device) {
                          Log.d("SEND", "Отмена перед отправкой");
