@@ -1,9 +1,14 @@
 package com.eriskip.ble_pg414.library;
 
+import android.Manifest;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.util.Log;
+
+import androidx.core.app.ActivityCompat;
 
 import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
@@ -11,6 +16,8 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 public class PG414 {
+
+        private Context context;
 
         public boolean HIDEMODE = false;        //режим работы без ПГ
         public long    zavod_mulage = 0;        //заводской номер из мак адреса
@@ -71,6 +78,10 @@ public class PG414 {
 
         public boolean localeRus;                             //Используется ли русский язык как локализация
 
+        private int cachedErrorBits = 0;
+        private long[] lastErrorTime = new long[32];
+        private static final long ERROR_HOLD_TIME = 800; // 800 миллисекунд
+
         //Конструктор
         public PG414(BluetoothGatt mBGT,  BluetoothGattCharacteristic Character)
         {
@@ -97,18 +108,18 @@ public class PG414 {
 
         public String[] array_of_Errors_RUS =
                 {
-                        "Порог 1 - Сенсор 1",                                                       //0
-                        "Порог 2 - Сенсор 1",                                                       //1
-                        "Превышение диапазона - Сенсор 1",                                          //2
-                        "Порог 1 - Сенсор 2",                                                       //3
-                        "Порог 2 - Сенсор 2",                                                       //4
-                        "Превышение диапазона - Сенсор 2",                                          //5
-                        "Порог 1 - Сенсор 3",                                                       //6
-                        "Порог 2 - Сенсор 3",                                                       //7
-                        "Превышение диапазона - Сенсор 3",                                          //8
-                        "Порог 1 - Сенсор 4",                                                       //9
-                        "Порог 2 - Сенсор 4",                                                       //10
-                        "Превышение диапазона - Сенсор 4",                                          //11
+                        "Порог 1 - CH4",                                                       //0
+                        "Порог 2 - CH4",                                                       //1
+                        "Превышение диапазона - CH4",                                          //2
+                        "Порог 1 - O2",                                                       //3
+                        "Порог 2 - O2",                                                       //4
+                        "Превышение диапазона - O2",                                          //5
+                        "Порог 1 - H2S",                                                       //6
+                        "Порог 2 - H2S",                                                       //7
+                        "Превышение диапазона - H2S",                                          //8
+                        "Порог 1 - CO",                                                       //9
+                        "Порог 2 - CO",                                                       //10
+                        "Превышение диапазона - CO",                                          //11
                         "Порог 1 - Сенсор 5",                                                       //12
                         "Порог 2 - Сенсор 5",                                                       //13
                         "Превышение диапазона - Сенсор 5",                                          //14
@@ -134,18 +145,18 @@ public class PG414 {
                 };
     public String[] array_of_Errors_EN =
             {
-                    "Alarm 1 - Sensor 1",
-                    "Alarm 2 - Sensor 1",
-                    "Over range - Sensor 1",
-                    "Alarm 1 - Sensor 2",
-                    "Alarm 2 - Sensor 2",
-                    "Over range - Sensor 2",
-                    "Alarm 1 - Sensor 3",
-                    "Alarm 2 - Sensor 3",
-                    "Over range - Sensor 3",
-                    "Alarm 1 - Sensor 4",
-                    "Alarm 2 - Sensor 4",
-                    "Over range - Sensor 4",
+                    "Alarm 1 - CH4",
+                    "Alarm 2 - CH4",
+                    "Over range - CH4",
+                    "Alarm 1 - O2",
+                    "Alarm 2 - O2",
+                    "Over range - O2",
+                    "Alarm 1 - H2S",
+                    "Alarm 2 - H2S",
+                    "Over range - H2S",
+                    "Alarm 1 - C0",
+                    "Alarm 2 - C0",
+                    "Over range - C0",
                     "Alarm 1 - Sensor 5",
                     "Alarm 2 - Sensor 5",
                     "Over range - Sensor 5",
@@ -186,6 +197,7 @@ public class PG414 {
             request[8] =(byte) '#';              //-------
             request[9] =(byte) 0x0D;
             mCharacteristic.setValue(request);                          //заносим в характеристику
+
             mBluetoothGatt.writeCharacteristic(mCharacteristic);
         }
 
@@ -215,6 +227,13 @@ public class PG414 {
         public void parseDyn(byte[] answer)
         {
             if (answer.length < 21) return;
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < answer.length; i++) {
+                sb.append(String.format("%02X ", answer[i]));
+            }
+            Log.d("PG414", "Raw answer: " + sb.toString());
+
             conc1 = ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF);       //текущая концентрация по 1 каналу
             conc2 = ((answer[7]  & 0xFF) << 8) + (answer[6]  & 0xFF);       //текущая концентрация по 2 каналу
             conc3 = ((answer[9]  & 0xFF) << 8) +  (answer[8] & 0xFF);       //текущая концентрация по 3 каналу
@@ -224,6 +243,8 @@ public class PG414 {
                 state[x] = answer[12 + x];
             }
             percent_charge = answer[20];
+
+            updateErrorCache();
         }
 
         //Запрос на чтение параметров
@@ -332,7 +353,7 @@ public class PG414 {
         {
             Set<String> errors = new LinkedHashSet<>();
 
-            int err = getErrorBits();
+            int err = getCashedErrorBits();
 
 
             for (int i = 0; i < 32; i++)
@@ -354,16 +375,93 @@ public class PG414 {
                 }
             }
 
-            if (errors.isEmpty())
+            Set<String> prioritizedErrors = applyThresholdPriority(errors);
+
+            if (prioritizedErrors.isEmpty())
             {
                 status = "OK";
                 return status;
             }
 
-            String result = String.join("\n", errors);
+            String result = String.join("\n", prioritizedErrors);
             status = result;
             return result;
         }
+
+    private Set<String> applyThresholdPriority(Set<String> errors)
+    {
+        Set<String> result = new LinkedHashSet<>();
+
+        // Обрабатываем каждый сенсор
+        for (int sensor = 0; sensor < 5; sensor++)
+        {
+            String firstThreshold = localeRus ?
+                    array_of_Errors_RUS[sensor * 3] :
+                    array_of_Errors_EN[sensor * 3];
+
+            String secondThreshold = localeRus ?
+                    array_of_Errors_RUS[sensor * 3 + 1] :
+                    array_of_Errors_EN[sensor * 3 + 1];
+
+            String rangeExceed = localeRus ?
+                    array_of_Errors_RUS[sensor * 3 + 2] :
+                    array_of_Errors_EN[sensor * 3 + 2];
+
+            // Приоритет: Превышение диапазона > Второй порог > Первый порог
+            if (errors.contains(rangeExceed))
+            {
+                result.add(rangeExceed);  // Показываем только превышение диапазона
+            }
+            else if (errors.contains(secondThreshold))
+            {
+                result.add(secondThreshold);  // Показываем только второй порог
+            }
+            else if (errors.contains(firstThreshold))
+            {
+                result.add(firstThreshold);  // Показываем только первый порог
+            }
+        }
+
+        // Добавляем системные ошибки (не связанные с порогами)
+        for (String error : errors)
+        {
+            if (!error.contains("Порог") && !error.contains("Превышение диапазона"))
+            {
+                result.add(error);
+            }
+        }
+
+        return result;
+    }
+
+    private void updateErrorCache()
+    {
+        int currentBits = (state[0] & 0xFF) |
+                ((state[1] & 0xFF) << 8) |
+                ((state[2] & 0xFF) << 16) |
+                ((state[3] & 0xFF) << 24);
+        long now = System.currentTimeMillis();
+
+        for (int i = 0; i < 32; i++)
+        {
+            if ((currentBits & (1 << i)) != 0)
+            {
+                cachedErrorBits |= (1 << i);
+                lastErrorTime[i] = now;
+            }
+            else if ((cachedErrorBits & (1 << i)) != 0)
+            {
+                if (now - lastErrorTime[i] > ERROR_HOLD_TIME)
+                {
+                    cachedErrorBits &= ~(1 << i);
+                }
+            }
+        }
+    }
+
+    public int getCashedErrorBits() {
+        return cachedErrorBits;
+    }
 
     public int getErrorBits() {
         return (state[0] & 0xFF) |

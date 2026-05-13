@@ -2,6 +2,7 @@ package com.eriskip.ble_pg414;
 
 import android.Manifest;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationManager;
 
@@ -21,11 +22,11 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.support.annotation.Nullable;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.NotificationCompat;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
+import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -192,6 +193,7 @@ public class InfoPage extends AppCompatActivity {
         return bestLocation;
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -237,7 +239,7 @@ public class InfoPage extends AppCompatActivity {
 
         //***********************************************************************************************************************************
         //Отправка на сервер
-        send_message_to_server(Sendind.eReg_info);
+//        send_message_to_server(Sendind.eReg_info);
 
         //GPS
         tgps = findViewById(R.id.tgps);
@@ -254,7 +256,11 @@ public class InfoPage extends AppCompatActivity {
         // создаем фильтр для BroadcastReceiver
         IntentFilter intFilt = new IntentFilter(BROADCAST_ACTION);
         // регистрируем (включаем) BroadcastReceiver
-        registerReceiver(br, intFilt);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(br, intFilt, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(br, intFilt);
+        }
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             tgps.setText("Запрет на геолокацию");
@@ -499,15 +505,8 @@ public class InfoPage extends AppCompatActivity {
                     }
 
                     if (needToSend) {
-                        if (!has_be_register) {                         //В зависимости от того была ли регистраци
-                            Log.d("Sending", "eReg_info");
-                            send_message_to_server(Sendind.eReg_info);   //Шлем регистрационные данные
-                        }
-                        else{
-                            Log.d("Sending", "eEvent");
-                            send_message_to_server(Sendind.eEvent);         //Шлем данные о событиях
-                        }
-
+                        Log.d("Sending", "eEvent");
+                        send_message_to_server(Sendind.eEvent);         //Шлем данные о событиях
                     }
 
                     sendingInfoToServ("");
@@ -533,36 +532,7 @@ public class InfoPage extends AppCompatActivity {
              int p = 0;
              if (Send_Message != Sendind.eNone) {
                  String params = "";
-                 if (Send_Message == Sendind.eReg_info) {
-
-
-
-                     try {
-
-                         JSONObject json = new JSONObject();
-
-                         // -------- fCount --------
-                         json.put("fCnt", fCnt);
-                         // -------- tags --------
-                         JSONObject tags = new JSONObject();
-                         tags.put("ERdeviceType", "2");
-                         tags.put("ERcodec", "pg-bluetooth");
-
-                         json.put("tags", tags);
-
-                         // -------- object --------
-                         JSONObject object = new JSONObject();
-
-                         object.put("zav_number", Connect.myPG.zavod_number);
-                         json.put("object", object);
-
-                         params = json.toString();
-                         Log.d("JSON_REG_SEND", json.toString(2));
-                     } catch (JSONException e) {
-                         e.printStackTrace();
-                     }
-
-                 } else if (Send_Message == Sendind.eEvent) {
+                 if (Send_Message == Sendind.eEvent) {
                      if (Connect.myPG.status.length() == 21)  Connect.myPG.status = "OK";
                     //Если статус пустой то шлем OK;
                      if (Connect.myPG.status.length() < 5) {
@@ -571,7 +541,6 @@ public class InfoPage extends AppCompatActivity {
 
 
                      try {
-                         // главный JSON
                          JSONObject json = new JSONObject();
 
                          // -------- fCount --------
@@ -659,10 +628,7 @@ public class InfoPage extends AppCompatActivity {
                  try {
                      URL url;
                      fCnt++;
-                     if (Send_Message == Sendind.eReg_info)
-                         url = new URL(MainActivity.Server);
-                     else
-                         url = new URL(MainActivity.Server);
+                     url = new URL(MainActivity.Server);
                      conn = (HttpURLConnection) url.openConnection();
                      conn.setRequestMethod("POST");
                      conn.setDoOutput(true);
@@ -685,8 +651,8 @@ public class InfoPage extends AppCompatActivity {
                      //conn.connect();
                      connect_server = true;
                      int responseCode = conn.getResponseCode();
-                     if (responseCode == 200 && Send_Message == Sendind.eReg_info)
-                         has_be_register = true;
+//                     if (responseCode == 200 && Send_Message == Sendind.eReg_info)
+//                         has_be_register = true;
                      if (responseCode != 200) connect_server = false;
 
                      ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -781,6 +747,12 @@ public class InfoPage extends AppCompatActivity {
          {
              Send_Message = parametr;
          }
+
+
+         public void backToConnect(View v){
+             onBackPressed();
+         }
+
 
     //Ввод адреса сервера
     public  void enterServer(View v)
