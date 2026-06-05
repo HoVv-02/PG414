@@ -11,12 +11,13 @@
     <string name="Scan_stopped">Scan stopped</string>
     <string name="params_reading">Reading params</string>
     <string name="connect">Connecting</string>
+    <string name="services_search">Search for services</string>
+    <string name="characteristic_search">Search for characteristic</string>
     <string name="dyn_read_complete">Reading dynamic parameters completed</string>
     <string name="read_params_compl">Reading parametrs completed</string>
     <string name="un_package">Unknown package</string>
     <string name="info_read">Reading info completed</string>
     <string name="err_conncet">Connect error</string>
-    <string name="repeat_error">Error connection. Need repeat connection</string>
     <string name="h2s">H2S, ppm</string>
     <string name="co">CO, ppm</string>
     <string name="o2">O2, %VOL</string>
@@ -49,4 +50,5 @@
     <string name="channel_description">Notification</string>
     <string name="con_lost">Lost connection with device</string>
     <string name="immobility">Immobility sensor</string>
+    <string name="check_gps">Check gps settings</string>
 </resources>

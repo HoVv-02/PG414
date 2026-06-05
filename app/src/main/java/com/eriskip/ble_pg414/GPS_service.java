@@ -2,33 +2,23 @@ package com.eriskip.ble_pg414;
 
 import android.Manifest;
 import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.icu.text.IDNA;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
-import android.provider.Settings;
-import android.support.annotation.Nullable;
-import android.support.annotation.RequiresApi;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.NotificationCompat;
+import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
 import android.util.Log;
 
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+
 
 public class GPS_service extends Service {
     public GPS_service() {
@@ -108,23 +98,32 @@ public class GPS_service extends Service {
             provider = "network";
             UpdateLocation();
         }
-//        return super.onStartCommand(intent, flags, startId);
         return START_NOT_STICKY;
     }
 
-    public Timer timer;
+    private final Handler handler = new Handler();
+    private Runnable timerRunnable;
 
     private void startTimer() {
-        timer = new Timer();
-        timer.scheduleAtFixedRate(new TimerTask() {
+        timerRunnable = new Runnable() {
             @Override
             public void run() {
                 sendDeSleeper();
+                handler.postDelayed(this, 5000);  // перепланируем себя
             }
-        }, 1000, 5000);
+        };
+        handler.postDelayed(timerRunnable, 1000);
+    }
+
+    private void stopTimer() {
+        if (timerRunnable != null) {
+            handler.removeCallbacks(timerRunnable);
+            timerRunnable = null;
+        }
     }
 
     public void onDestroy() {
+        stopTimer();
         super.onDestroy();
         if (locationManager != null) {
             //noinspection MissingPermission

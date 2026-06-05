@@ -1,16 +1,11 @@
 package com.eriskip.ble_pg414;
-
 import android.Manifest;
 
 import android.annotation.SuppressLint;
-import android.app.Notification;
-import android.app.NotificationManager;
 
-import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
@@ -20,21 +15,18 @@ import android.location.LocationManager;
 
 import android.os.Build;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
-import androidx.annotation.Nullable;
+
+import androidx.annotation.RequiresPermission;
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.CheckBox;
-import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -42,48 +34,43 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.ExecutionException;
 
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static java.lang.Math.abs;
+
+import com.eriskip.ble_pg414.library.PG414;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 
 public class InfoPage extends AppCompatActivity {
-
-    public static String URL_reg = "/dev_add.php";                      //файл который отвечает за добавления устройства - и как таковой проверки регистрации
-    public static String URL_event = "/event_add.php";                  //файл который отвечает за регстрацию события на сервере
-    private static final String TAG = "Connection PG414";               //таг для логера
     private static final String FILE_NAME = "archive.dat";              //имя файла архива
 
     public final static String BROADCAST_ACTION = "com.eriskip.ble_pg414";
     BroadcastReceiver br;   //слушатель параметров геолокациии от нашего сервиса
 
-    enum Sendind{eReg_info, eEvent, eArchive, eNone}
+    public enum Sending{eEvent, eArchive}
 
-    public static Sendind Send_Message = Sendind.eReg_info;                                               //переменная, которая отвечает за то какой сейчас пакет отправляется на сервер
+    public static Sending Send_Message = Sending.eEvent;                                               //переменная, которая отвечает за то какой сейчас пакет отправляется на сервер
 
     //>>>>>  UI ------------------------------------------------------------------------------------
-    public static TextView tconc1, tconc2, tconc3, tconc4, tzavod, gaz1, gaz2, gaz3, gaz4, tgps, tstatus, //текстовые поля
+    //>>>>>  UI ------------------------------------------------------------------------------------
+    public TextView tconc1, tconc2, tconc3, tconc4, tzavod, gaz1, gaz2, gaz3, gaz4, tgps, tstatus, //текстовые поля
              charge, errcon, arch_cnt;
     ImageView disconnect, arch_alert;
     //----------------------------------------------------------------------------------------------
@@ -94,9 +81,6 @@ public class InfoPage extends AppCompatActivity {
 
     public static volatile boolean connect_device =  false;                //соединение с устройством
     public static boolean connect_server =  false;                //соединение с сервером
-    public static boolean user_register =   true;                 //подошел ли пароль
-    public static boolean has_be_register = false;                //было ли зарегистрированно устройство
-    public static boolean needToSend = false;                       // нужно ли менять пакет
     private boolean alarmMode = false;                              // аварийный режим, сработка порога
     private boolean lastAlarmState = false;                         // штатный режим
 
@@ -128,18 +112,6 @@ public class InfoPage extends AppCompatActivity {
                 checkBit(err,30);    // Неисправность сенсора
     }
 
-//    private final int[] CRITICAL_BITS = {
-//            0,1,2,   // Сенсор 1
-//            3,4,5,   // Сенсор 2
-//            6,7,8,   // Сенсор 3
-//            9,10,11, // Сенсор 4
-//            12,13,14,// Сенсор 5
-//
-//            15,      // Человек без движения
-//            23,24,   // Температура / давление
-//            27,      // Падение человека
-//            30       // Неисправность сенсора
-//    };
     private boolean checkBit(int err, int bit) {
         return (err & (1 << bit)) != 0;
     }
@@ -148,21 +120,25 @@ public class InfoPage extends AppCompatActivity {
     public final static String PARAM_TASK = "task";
     public static String param_lat_lon = "none";                  //координаты полученные от сервиса - Широта
 
-    public static int fCnt = 0;                                    //номер пакета
-
+    public int fCnt = 0;                                    //номер пакета
 
     public int connToDev = 0;                      // попытки подключения
     public File arch_file;                         // полный путь файла архива
+
+    private PG414 myPG;
+
+
 
     @Override
     protected void onDestroy()
     {
         Log.d("InfoPage","Меня сломали. Гасим сервисы");
         stopService(new Intent(this, GPS_service.class));
-//        timer.cancel();
         handler.removeCallbacksAndMessages(null);
         serverHandler.removeCallbacksAndMessages(null);
         stop_dyn = true;
+        PG414.removeInstance();
+
         super.onDestroy();
 
     }
@@ -181,11 +157,11 @@ public class InfoPage extends AppCompatActivity {
                     continue;
                 }
                 if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
-                    // Found best last known location: %s", l);
+                    // Found best last known location: %s, l);
                     bestLocation = l;
                 }
             } catch (SecurityException e) {
-                e.printStackTrace();
+                Log.e("Location", "getlocation error");
             }
 
 
@@ -193,16 +169,20 @@ public class InfoPage extends AppCompatActivity {
         return bestLocation;
     }
 
-    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    @SuppressLint({"UnspecifiedRegisterReceiverFlag", "SetTextI18n"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         stop_dyn = false;
+        fCnt = 0;                                           //счетчик пакетов
+
+        myPG = PG414.getInstance();
+
         setContentView(R.layout.activity_info_page);
         if (!Connect.offline && !Connect.hideMode)
         {
-            Connect.myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
+            myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
             Connect.read_pause = false;
         }
         else
@@ -215,7 +195,7 @@ public class InfoPage extends AppCompatActivity {
         tconc4 = findViewById(R.id.tconc4);
 
         tzavod = findViewById(R.id.tzavod);
-        tzavod.setText(Connect.myPG.zavod_number +"");
+        tzavod.setText(String.valueOf(myPG.zavod_number));
 
         gaz1 = findViewById(R.id.gaz1);
         gaz2 = findViewById(R.id.gaz2);
@@ -230,16 +210,10 @@ public class InfoPage extends AppCompatActivity {
         disconnect = findViewById(R.id.disconnect);         //картинка дисконнекта
 
         cbMoblity = findViewById(R.id.cbMoblity);
-        if ((Connect.myPG.onoff2 & (1 << 10)) == 0) cbMoblity.setChecked(true);
-        /************************Получаем параметры, введенные пользователем**********************/
-        Connect.myPG.password    = MainActivity.Password;
-        Connect.myPG.login       = MainActivity.Login;
-        Connect.myPG.descriptor  = MainActivity.Description;
-        /*---------------------------------------------------------------------------------------*/
-
+        if ((myPG.onoff2 & (1 << 10)) == 0) cbMoblity.setChecked(true);
         //***********************************************************************************************************************************
         //Отправка на сервер
-//        send_message_to_server(Sendind.eReg_info);
+//        send_message_to_server(Sending.eReg_info);
 
         //GPS
         tgps = findViewById(R.id.tgps);
@@ -249,7 +223,7 @@ public class InfoPage extends AppCompatActivity {
             // действия при получении сообщений
             public void onReceive(Context context, Intent intent) {
                 String coord = intent.getStringExtra(PARAM_TASK);
-                if (coord.length() > 0)                             //Проверяем на длинну. Елси 0, то цель экого пакета просто разбудить активити
+                if (coord != null && !coord.isEmpty())                             //Проверяем на длинну. Елси 0, то цель экого пакета просто разбудить активити
                     param_lat_lon = coord;
             }
         };
@@ -268,10 +242,10 @@ public class InfoPage extends AppCompatActivity {
         }
 
         //Выводим описатели газа
-        gaz1.setText(Connect.myPG.gazType[0] + ", " + Connect.myPG.gazUnit[0]);
-        gaz2.setText(Connect.myPG.gazType[1] + ", " + Connect.myPG.gazUnit[1]);
-        gaz3.setText(Connect.myPG.gazType[2] + ", " + Connect.myPG.gazUnit[2]);
-        gaz4.setText(Connect.myPG.gazType[3] + ", " + Connect.myPG.gazUnit[3]);
+        gaz1.setText(myPG.gazType[0] + ", " + myPG.gazUnit[0]);
+        gaz2.setText(myPG.gazType[1] + ", " + myPG.gazUnit[1]);
+        gaz3.setText(myPG.gazType[2] + ", " + myPG.gazUnit[2]);
+        gaz4.setText(myPG.gazType[3] + ", " + myPG.gazUnit[3]);
 
         //Статус
         tstatus = findViewById(R.id.tstate);
@@ -314,16 +288,14 @@ public class InfoPage extends AppCompatActivity {
         }
 
         startServerTimer();
-        cbMoblity.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                setCheck();
-            }
-        });
+        cbMoblity.setOnClickListener(view -> setCheck());
 
     }
+
+
     //Обновление параметров GPS
-    static void UpdateLocation(Location location)
+    @SuppressLint("SetTextI18n")
+    private void UpdateLocation(Location location)
     {
         if (location!=null) {
             String lat;
@@ -335,13 +307,13 @@ public class InfoPage extends AppCompatActivity {
             if (longt.length() > 12) longt = longt.substring(0, 11);
             tgps.setText(lat + ", \r" + longt);
             result = lat + ", " + longt;
-            Connect.myPG.gps = result;
-            Connect.myPG.lat = lat;
-            Connect.myPG.lng = longt;
+            PG414.getInstance().gps = result;
+            PG414.getInstance().lat = lat;
+            PG414.getInstance().lng = longt;
         }
         else
         {
-            tgps.setText("проверьте настройки GPS");
+            tgps.setText(R.string.check_gps);
 
         }
     }
@@ -370,16 +342,13 @@ public class InfoPage extends AppCompatActivity {
         super.onPause();
     }
 
-    //Обработчик кнопки Подробнее
-    public void NullOut(View view){
-    }
-
     boolean cnt_con;           //можно ли увеличивать счетсчик подключения и писать в файл
     boolean sending_archive;   //идет отправка архива
     static public boolean stop_dyn;     //отключить динамическое чтение
 
     /* Поток чтения динамических параметров */
     Runnable runnableDynTask = new Runnable() {
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         public void run() {
             try {
                 while (true) {
@@ -394,15 +363,19 @@ public class InfoPage extends AppCompatActivity {
                         }
                         Log.d("ПГ-414","Делаю запрос");
                         //Чтение статуса
-                        Connect.myPG.reqDyn();
+                        myPG.reqDyn();
                         Connect.State_pack = Connect.RX_pack.DYNPARAM;
                         Thread.sleep(2300);
                         if (stop_dyn) return;
-                        Connect.myPG.startRead();
+                        myPG.startRead();
+                        //noinspection StatementWithEmptyBody
                         while (Connect.State_pack != Connect.RX_pack.COMPLETE && abort_counter < 5)
                             ;                      //ждем пока не прочтется
-                        if (abort_counter >= 5)
-                            Log.d("ПГ-414","Не могу достучасться");
+
+                        Log.d("InfoPage", abort_counter + " " +  Connect.State_pack);
+
+                        if (abort_counter >= 5 && Connect.State_pack != Connect.RX_pack.COMPLETE)
+                            Log.d("ПГ-414","Не могу достучаться " + connToDev);
                         else {
                             Log.d("ПГ-414", "Прочитал");
                             connToDev = 0;
@@ -415,19 +388,14 @@ public class InfoPage extends AppCompatActivity {
                 }
 
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                Log.e("InfoPage", "Runnable error");
             }
-            return;
         }
     };
-
-
-
-        public byte cnt_sec = 0;
         byte abort_counter = 0;
 
         ///Таймер для обновления графического интерфейса в зависимости от показаний
-        private Handler handler = new Handler(Looper.getMainLooper());
+        private final Handler handler = new Handler(Looper.getMainLooper());
 
     private void fonValRefreshStart() {
 
@@ -444,31 +412,70 @@ public class InfoPage extends AppCompatActivity {
         }, 2000); // первый запуск через 2 сек
     }
 
-    private Handler serverHandler = new Handler(Looper.getMainLooper());
+    boolean firstAlarmPackage = false;
+
+    private final Handler serverHandler = new Handler(Looper.getMainLooper());
 
 
     private void startServerTimer() {
 
+        InfoPage currentPage = this;
+
         serverHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                Log.d("SERVER_TIMER", "Соединение с устройством" + connect_device);
+                Log.d("SERVER_TIMER", "Соединение с устройством " + connect_device + " Строк в архиве: " + lines_archive + " Соединение с сервером: " + connect_server);
 
-                int err = Connect.myPG.getErrorBits();
+
+
+                if (!connect_device) {
+                    Log.d("SEND", "Устройство отключено — отправка отменена");
+                    return;
+                }
+
+
+                new Thread(() -> {
+                    try {
+                            while (lines_archive > 0) {
+                                sending_archive = true;
+                                Thread.sleep(60);
+                                Send_Message = Sending.eArchive;
+                                String line = readLastLine(FILE_NAME);
+                                if (line != null && !line.isEmpty()) {
+                                    sendingInfoToServ(currentPage, line);
+                                    Log.d("ARCHIVE_READ", line);
+                                    Log.d("ARCHIVE_READ",  String.valueOf(lines_archive));
+                                } else {
+                                    Log.w("ARCHIVE", "readLastLine вернул null или пустую строку");
+                                }
+                                lines_archive--;
+
+                            }
+                            sending_archive = false;
+                    } catch (Exception e) {
+                        Log.e("serverHandler", "Ошибка отправки архива");
+                    }
+
+                }).start();
+
+                int err = myPG.getErrorBits();
                 boolean currentAlarm = isAlarm(err);
-                Log.d("SERVER_TIMER", "Current state: " + Connect.myPG.status);
+                Log.d("SERVER_TIMER", "Current state: " + myPG.status);
                 Log.d("SERVER_TIMER", "Alarm now: " + currentAlarm + ", Alarm before: " + lastAlarmState);
+                firstAlarmPackage = false;
 
-                if (currentAlarm && !lastAlarmState) {                  //переход в аварийный режим
+                if (currentAlarm && !lastAlarmState && lines_archive == 0) {                  //переход в аварийный режим
                     Log.d("ALARM", "ВХОД В АВАРИЙНЫЙ РЕЖИМ");
                     alarmMode = true;
+                    firstAlarmPackage = true;
 
                     // немедленная отправка
                     new Thread(() -> {
                         if(connect_device){
                             Log.d("SEND", "Немедленная отправка");
-                            Send_Message = Sendind.eEvent;
-                            sendingInfoToServ("");
+                            Send_Message = Sending.eEvent;
+                            sendingInfoToServ(currentPage, "");
+
                         }
 
                     }).start();
@@ -481,62 +488,43 @@ public class InfoPage extends AppCompatActivity {
 
                 lastAlarmState = currentAlarm;
 
+                if(!firstAlarmPackage && lines_archive == 0){
 
-                new Thread(() -> {
-                    if (!connect_device) {
-                        Log.d("SEND", "Устройство отключено — отправка отменена");
-                        return;
-                    }
-                    try {
-                        //Если есть подключение к серверу
-                        if (connect_server) {
-                            while (lines_archive > 0 && connect_server) {
-                                sending_archive = true;
-                                Thread.sleep(60);
-                                Send_Message = Sendind.eArchive;
-                                sendingInfoToServ(readLastLine(FILE_NAME));      //отправляем на сервер и удалаям строку из файла
-                                Log.d("ARCHIVE_READ", readLastLine(FILE_NAME));
-                                lines_archive--;
-                            }
-                            sending_archive = false;
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-
-                    if (needToSend) {
+                    new Thread(() -> {
                         Log.d("Sending", "eEvent");
-                        send_message_to_server(Sendind.eEvent);         //Шлем данные о событиях
-                    }
+                        send_message_to_server(Sending.eEvent);         //Шлем данные о событиях
 
-                    sendingInfoToServ("");
-                }).start();
+
+                        sendingInfoToServ(currentPage, "");
+
+                    }).start();
+                }
 
                 long delay = alarmMode ? 3000 : 30000;
 
 
                 serverHandler.postDelayed(this, delay);
+
             }
         }, 3000);
     }
 
 
         //Функция для отправки данных на сервер. Регистрационнная инфомрация отправыляется один раз, динаическая - периодически, сразу после опроса устрйоства
-         public static byte[] sendingInfoToServ(String send_arch)
+         public void sendingInfoToServ(InfoPage page, String send_arch)
          {
              if (!connect_device) {
                  Log.d("SEND", "Нет устройства — выход");
-                 return null;
+                 return;
              }
              Log.d("На сервер","отправляю" + connect_server);
-             int p = 0;
-             if (Send_Message != Sendind.eNone) {
                  String params = "";
-                 if (Send_Message == Sendind.eEvent) {
-                     if (Connect.myPG.status.length() == 21)  Connect.myPG.status = "OK";
+                 if (Send_Message == Sending.eEvent) {
+                     Log.d("SEND", "eEvent");
+                     if (PG414.getInstance().status.length() == 21)  PG414.getInstance().status = "OK";
                     //Если статус пустой то шлем OK;
-                     if (Connect.myPG.status.length() < 5) {
-                         Connect.myPG.status = "OK";
+                     if (PG414.getInstance().status.length() < 5) {
+                         PG414.getInstance().status = "OK";
                      }
 
 
@@ -556,79 +544,79 @@ public class InfoPage extends AppCompatActivity {
                          // -------- object --------
                          JSONObject object = new JSONObject();
 
-                         object.put("zav_number", Connect.myPG.zavod_number);
-                         object.put("login", Connect.myPG.login);
-                         object.put("password", Connect.myPG.password);
+                         object.put("zav_number", PG414.getInstance().zavod_number);
 
-                         JSONObject gps = new JSONObject();
-                         gps.put("lat", Double.parseDouble(Connect.myPG.lat));
-                         gps.put("lng", Double.parseDouble(Connect.myPG.lng));
-                         object.put("gps", gps);
-
-
-
-                         object.put("state", prepareState(Connect.myPG.status));
+                         object.put("state", prepareState(PG414.getInstance().status));
 
                          // концентрация
-                         object.put("gaz_type1", Connect.myPG.gazType[0]);
+                         object.put("gaz_type1", PG414.getInstance().gazType[0]);
                          String text1 = tconc1.getText().toString();
                          text1 = text1.replace(',', '.');
                          object.put("conc1", Double.parseDouble(text1));
-                         object.put("measure_unit1", Connect.myPG.gazUnit[0]);
+                         object.put("measure_unit1", PG414.getInstance().gazUnit[0]);
 
-                         object.put("gaz_type2", Connect.myPG.gazType[1]);
+                         object.put("gaz_type2", PG414.getInstance().gazType[1]);
                          String text2 = tconc2.getText().toString();
                          text2 = text2.replace(',', '.');
                          object.put("conc2", Double.parseDouble(text2));
-                         object.put("measure_unit2", Connect.myPG.gazUnit[1]);
+                         object.put("measure_unit2", PG414.getInstance().gazUnit[1]);
 
-                         object.put("gaz_type3", Connect.myPG.gazType[2]);
+                         object.put("gaz_type3", PG414.getInstance().gazType[2]);
                          String text3 = tconc3.getText().toString();
                          text3 = text3.replace(',', '.');
                          object.put("conc3", Double.parseDouble(text3));
-                         object.put("measure_unit3", Connect.myPG.gazUnit[2]);
+                         object.put("measure_unit3", PG414.getInstance().gazUnit[2]);
 
-                         object.put("gaz_type4", Connect.myPG.gazType[3]);
+                         object.put("gaz_type4", PG414.getInstance().gazType[3]);
                          String text4 = tconc4.getText().toString();
                          text4 = text4.replace(',', '.');
                          object.put("conc4", Double.parseDouble(text4));
-                         object.put("measure_unit4", Connect.myPG.gazUnit[3]);
+                         object.put("measure_unit4", PG414.getInstance().gazUnit[3]);
 
-                         object.put("battery_percent", Connect.myPG.percent_charge);
+                         object.put("battery_percent", PG414.getInstance().percent_charge);
 
                          json.put("object", object);
                          params = json.toString();
 
                          Log.d("JSON_SEND", json.toString(2));
                      } catch (JSONException e) {
-                         e.printStackTrace();
+                         Log.e("JSON", "Ошибка формирования пакета");
                      }
-                 } else if (Send_Message == Sendind.eArchive) {             //если ведется архиваня отправка данных
+                 } else if (Send_Message == Sending.eArchive) {             //если ведется архиваня отправка данных
                      params = send_arch;
 
                      try{
-                         JSONObject json = new JSONObject(params);
-                         json.put("fCnt", fCnt);
+                         JSONObject originalJson = new JSONObject(params);
 
-                         params = json.toString();
-                         Log.d("JSON_SEND_ARCHIVE", json.toString(2));
+                         JSONObject newJson = new JSONObject();
+
+                         newJson.put("fCnt", fCnt);
+
+                         Iterator<String> keys = originalJson.keys();
+                         while (keys.hasNext()) {
+                             String key = keys.next();
+                             newJson.put(key, originalJson.get(key));
+                         }
+
+                         params = newJson.toString();
+                         Log.d("JSON_SEND_ARCHIVE", newJson.toString(2));
                      }catch (org.json.JSONException e){
-                         e.printStackTrace();
+                         Log.e("JSON", "Ошибка формирования пакета архива");
                      }
 
 
 
                  }
-                 else return null;
-                 byte[] dataz = null;
+                 byte[] dataz;
                  InputStream is = null;
 
-                 HttpURLConnection conn = null;
+                 HttpURLConnection conn;
+
+                 boolean needToSave = false;
 
                  try {
                      URL url;
-                     fCnt++;
-                     url = new URL(MainActivity.Server);
+                     url = new URL(Connect.Server);
                      conn = (HttpURLConnection) url.openConnection();
                      conn.setRequestMethod("POST");
                      conn.setDoOutput(true);
@@ -640,50 +628,71 @@ public class InfoPage extends AppCompatActivity {
                      OutputStream os = conn.getOutputStream();
                      if (!connect_device) {
                          Log.d("SEND", "Отмена перед отправкой");
-                         return null;
+                         return;
                      }
-                     dataz = params.getBytes("UTF-8");
+                     dataz = params.getBytes(StandardCharsets.UTF_8);
+
+                     String requestData = new String(dataz, StandardCharsets.UTF_8);
+                     Log.e("HTTP_SEND", "=== HTTP ЗАПРОС ===");
+                     Log.e("HTTP_SEND", "Время: " + System.currentTimeMillis());
+                     Log.e("HTTP_SEND", "Тело: " + requestData);
+
                      os.write(dataz);
+                     Log.d("SEND", "пакет отправлен");
+
                      dataz = null;
                      os.flush();
                      os.close();
 
-                     //conn.connect();
-                     connect_server = true;
                      int responseCode = conn.getResponseCode();
-//                     if (responseCode == 200 && Send_Message == Sendind.eReg_info)
-//                         has_be_register = true;
-                     if (responseCode != 200) connect_server = false;
 
-                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                     is = conn.getInputStream();
+                     if(responseCode == 200){
+                         ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                         is = conn.getInputStream();
 
-                     byte[] buffer = new byte[8192];
-                     int bytesRead;
-                     while ((bytesRead = is.read(buffer)) != -1) {
-                         baos.write(buffer, 0, bytesRead);
-                     }dataz = baos.toByteArray();
+                         byte[] buffer = new byte[8192];
+                         int bytesRead;
+                         while ((bytesRead = is.read(buffer)) != -1) {
+                             baos.write(buffer, 0, bytesRead);
+                         }dataz = baos.toByteArray();
 
-//                     if (dataz[1] == 'e' && dataz[2] == 'r')
-//                     {
-//                         connect_server = false;
-//                     }
+                         String responseStr = new String(dataz, StandardCharsets.UTF_8);
+                         JSONObject respJson = new JSONObject(responseStr);
+                         boolean success = respJson.getBoolean("success");
 
-                     String responseStr = new String(dataz, "UTF-8");
-                     JSONObject respJson = new JSONObject(responseStr);
-                     boolean success = respJson.getBoolean("success");
+                         if(success){
+                             connect_server = true;
+                             Log.d("SEND", "Успешно отправлено");
+                         }else{
+                             connect_server = false;
+                             Log.w("SEND", "Данные не приняты");
+                             needToSave = true;
+                         }
 
-                     if(!success){
+                         fCnt++;
+                     }else{
                          connect_server = false;
+                         Log.e("SEND", "HTTP ошибка: " + responseCode);
+                         Log.w("SEND", "Данные не приняты");
+                         needToSave = true;
                      }
-                     Log.d("SERVER_URL", MainActivity.Server);
+
+                     Log.d("SERVER_URL", Connect.Server);
                      Log.d("HTTP_CODE", String.valueOf(responseCode));
                      Log.d("SERVER_RESPONSE", new String(dataz));
+
                  } catch
                          (Exception ex) {
-                     //Log.d(TAG,"ERROR in send_message_to_server: " + ex.toString());
+                     connect_server = false;
+                     needToSave = true;
                      Log.e("DEBUG", "Error sending data", ex);
                  } finally {
+                     if (needToSave) {
+                         String packetToArchive = removeFcntFromJson(params);
+                         page.writeToFile(packetToArchive);                                   //пишем в файл и увеличиваем количество линий
+                         Log.d("JSON_ARCHIVE_SAVE", packetToArchive);
+                     }
+
                      try {
 
                          if (is != null)
@@ -692,26 +701,19 @@ public class InfoPage extends AppCompatActivity {
                          Log.e("DEBUG", "IS close error", ex);
                      }
 
-//                     if (conn != null) {
-//                         conn.disconnect();
-//                     }
                  }
-                 Send_Message = Sendind.eNone;
-                 if (dataz != null)
-                 {
-                   if (dataz.length > 3)
-                    if (connect_server && dataz[1] == 'n' && dataz[2] == 'o')
-                     user_register = false;
-                     else
-                     user_register = true;
-                 }
-                 else
-                     connect_server = false;
-                 return dataz;
-             }
-             return null;
 
          }
+
+    private static String removeFcntFromJson(String jsonWithFcnt) {
+        try {
+            JSONObject obj = new JSONObject(jsonWithFcnt);
+            obj.remove("fCnt");  // удаляем поле fCnt
+            return obj.toString();
+        } catch (JSONException e) {
+            return jsonWithFcnt;  // если ошибка, возвращаем как есть
+        }
+    }
 
     private static String prepareState(String state) {
 
@@ -743,7 +745,7 @@ public class InfoPage extends AppCompatActivity {
     }
 
 
-         public void send_message_to_server(Sendind parametr)
+         public void send_message_to_server(Sending parametr)
          {
              Send_Message = parametr;
          }
@@ -765,25 +767,21 @@ public class InfoPage extends AppCompatActivity {
 
             // Set an EditText view to get user input
             final EditText input = new EditText(InfoPage.this);
-            input.setText(MainActivity.Server);
+            input.setText(Connect.Server);
             input.setTextColor(Color.rgb(232, 228, 211));
             alert.setView(input);
 
 
-            alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface dialog, int whichButton) {
-                    String resulty = input.getText().toString();
-                    //Заполняем поле
-                    MainActivity.Server = resulty;
-                    MainActivity.editor.putString(MainActivity.SERVER_SETTING, resulty);
-                    MainActivity.editor.commit();
-                }
+            alert.setPositiveButton("Ok", (dialog, whichButton) -> {
+                String resulty = input.getText().toString();
+                //Заполняем поле
+                Connect.Server = resulty;
+                Connect.editor.putString(Connect.SERVER_SETTING, resulty);
+                Connect.editor.commit();
             });
 
-            alert.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface dialog, int whichButton) {
-                    // Canceled.
-                }
+            alert.setNegativeButton("Cancel", (dialog, whichButton) -> {
+                // Canceled.
             });
 
             alert.show();
@@ -805,16 +803,10 @@ public class InfoPage extends AppCompatActivity {
             alert.setTitle(getString(R.string.Alert_title));
             alert.setMessage(getString(R.string.Clear_file));
 
-            alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface dialog, int whichButton) {
-                    clearFile();
-                }
-            });
+            alert.setPositiveButton("Ok", (dialog, whichButton) -> clearFile());
 
-            alert.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface dialog, int whichButton) {
-                    // Canceled.
-                }
+            alert.setNegativeButton("Cancel", (dialog, whichButton) -> {
+                // Canceled.
             });
             alert.show();
         }
@@ -829,44 +821,39 @@ public class InfoPage extends AppCompatActivity {
 
     }
 
+    @SuppressLint("SetTextI18n")
     public void UIUpdate()
     {
-            String params = "";
             if (!Connect.read_pause) {
 
                 //Применяем дискретность газов
-                NumberFormat nf[] = new NumberFormat[4];
+                NumberFormat[] nf;
+                nf = new NumberFormat[4];
                 for (byte j =0; j < 4; j++)
                 {
                     nf[j] = NumberFormat.getInstance();
 
-                    int digits = Math.abs(Connect.myPG.gazDiskret[j]);
+                    int digits = Math.abs(myPG.gazDiskret[j]);
 
                     nf[j].setMaximumFractionDigits(digits);
                     nf[j].setMinimumFractionDigits(digits);
                     nf[j].setGroupingUsed(false);
                 }
                 //В данном коде выводим форматированную     концентрацию                 при этом учитываем          дискретность
-                tconc1.setText(nf[0].format(Connect.myPG.conc1/(float)(Connect.myPG.gazDelitel[abs(Connect.myPG.gazDiskret[0])])));
-                tconc2.setText(nf[1].format(Connect.myPG.conc2/(float)(Connect.myPG.gazDelitel[abs(Connect.myPG.gazDiskret[1])])));
-                tconc3.setText(nf[2].format(Connect.myPG.conc3/(float)(Connect.myPG.gazDelitel[abs(Connect.myPG.gazDiskret[2])])));
-                tconc4.setText(nf[3].format(Connect.myPG.conc4/(float)(Connect.myPG.gazDelitel[abs(Connect.myPG.gazDiskret[3])])));
+                tconc1.setText(nf[0].format(myPG.conc1/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[0])])));
+                tconc2.setText(nf[1].format(myPG.conc2/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[1])])));
+                tconc3.setText(nf[2].format(myPG.conc3/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[2])])));
+                tconc4.setText(nf[3].format(myPG.conc4/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[3])])));
                 //Процент заряда батареи
-                charge.setText(getResources().getString(R.string.Charge) + Connect.myPG.percent_charge + "%");
+                charge.setText(getResources().getString(R.string.Charge) + myPG.percent_charge + "%");
                 //Статус
-                String tState = Connect.myPG.Make_State();
+                String tState = myPG.Make_State();
                 if (Connect.mConnectionState != STATE_CONNECTED) {
                     tState = getString(R.string.con_lost);
-                    Connect.myPG.status = tState;
+                    myPG.status = tState;
                 }
                 tstatus.setText(tState);
-                if (!user_register && connect_server)
-                {
-                    errcon.setText(R.string.un_logi);            //если пользователь не зарегистрированный , то выводим ошибку авторизации
-                    errcon.setVisibility(View.VISIBLE);
-                }
-                else
-                if (!connect_server) {                                 //Если подключен к серверу
+                if (!connect_server) {                                 //Если не подключен к серверу
                     errcon.setText(R.string.Server_aerror);
                     errcon.setVisibility(View.VISIBLE);
                     disconnect.setVisibility(View.VISIBLE);
@@ -877,22 +864,17 @@ public class InfoPage extends AppCompatActivity {
                 }
 
 
-                if (cnt_sec == 5) {
-                    cnt_sec = 0;
-                    needToSend = true;
-                }
-                cnt_sec++;
-
                 connToDev++;                                            //увеличиываем счетчик попыток подключения. он сбрасывается при успешном чтении
                 if (connToDev > 222) connToDev = 11;
+                Log.d("UIUpdate", String.valueOf(connToDev));
                 if (connToDev > 10 && !sending_archive)                  //если попыток было 5 а информации от ПГ-414 не поступала выводим сообщение и запускаем переподключение
                 {
                     connect_device = false;
-                  //  tstatus.setText(R.string.err_con_dev);            //КОСТЫЛЬ. на планшетах почему то постоянно пишет хоть связь и есть
+                    tstatus.setText(R.string.err_con_dev);            //КОСТЫЛЬ. на планшетах почему то постоянно пишет хоть связь и есть
                     try{
-                        Connect.myPG.mBluetoothGatt.connect();
+                        myPG.mBluetoothGatt.connect();
                     } catch (SecurityException e) {
-                        e.printStackTrace();
+                        Log.e("InfoPage", "connect error");
                     }
 
                 }
@@ -911,20 +893,11 @@ public class InfoPage extends AppCompatActivity {
                 }
 
             }
-            else if (Connect.hideMode)
-            {
-                if (cnt_sec == 5) {
-                    cnt_sec = 0;
-                    needToSend = true;       //Шлем данные о событиях
-                }
-                cnt_sec++;
-            }
-             String param = "";
 
             /*Обновляем информацию по GPS*/
-            if (param_lat_lon != "none") {
+            if (!"none".equals(param_lat_lon)) {
                 tgps.setText(param_lat_lon);
-                Connect.myPG.gps = param_lat_lon;
+                myPG.gps = param_lat_lon;
             }
 
             if (cnt_con)
@@ -942,34 +915,29 @@ public class InfoPage extends AppCompatActivity {
 
                      // -------- object --------
                      JSONObject object = new JSONObject();
-                     object.put("zav_number", Connect.myPG.zavod_number);
-                     object.put("login", Connect.myPG.login);
-                     object.put("password", Connect.myPG.password);
+                     object.put("zav_number", myPG.zavod_number);
 
                      JSONObject gps = new JSONObject();
-                     gps.put("lat", Double.parseDouble(Connect.myPG.lat));
-                     gps.put("lng", Double.parseDouble(Connect.myPG.lng));
-                     object.put("gps", gps);
 
-                     object.put("state", "Archive: " + Connect.myPG.status);
+                     object.put("state", "Archive: " + myPG.status);
 
-                     object.put("gaz_type1", Connect.myPG.gazType[0]);
+                     object.put("gaz_type1", myPG.gazType[0]);
                      object.put("conc1", Double.parseDouble(tconc1.getText().toString().replace(',', '.')));
-                     object.put("measure_unit1", Connect.myPG.gazUnit[0]);
+                     object.put("measure_unit1", myPG.gazUnit[0]);
 
-                     object.put("gaz_type2", Connect.myPG.gazType[1]);
+                     object.put("gaz_type2", myPG.gazType[1]);
                      object.put("conc2", Double.parseDouble(tconc2.getText().toString().replace(',', '.')));
-                     object.put("measure_unit2", Connect.myPG.gazUnit[1]);
+                     object.put("measure_unit2", myPG.gazUnit[1]);
 
-                     object.put("gaz_type3", Connect.myPG.gazType[2]);
+                     object.put("gaz_type3", myPG.gazType[2]);
                      object.put("conc3", Double.parseDouble(tconc3.getText().toString().replace(',', '.')));
-                     object.put("measure_unit3", Connect.myPG.gazUnit[2]);
+                     object.put("measure_unit3", myPG.gazUnit[2]);
 
-                     object.put("gaz_type4", Connect.myPG.gazType[3]);
+                     object.put("gaz_type4", myPG.gazType[3]);
                      object.put("conc4", Double.parseDouble(tconc4.getText().toString().replace(',', '.')));
-                     object.put("measure_unit4", Connect.myPG.gazUnit[3]);
+                     object.put("measure_unit4", myPG.gazUnit[3]);
 
-                     object.put("battery_percent", Connect.myPG.percent_charge);
+                     object.put("battery_percent", myPG.percent_charge);
 
                      json.put("object", object);
 
@@ -977,7 +945,7 @@ public class InfoPage extends AppCompatActivity {
                      writeToFile(json.toString());                                   //пишем в файл и увеличиваем количество линий
                      Log.d("JSON_ARCHIVE_SAVE", json.toString(2));
                  } catch (JSONException e) {
-                     e.printStackTrace();
+                     Log.e("JSON", "Ошибка формирования пакета архива");
                  }
                   }
                 cnt_con = false;
@@ -992,11 +960,9 @@ public class InfoPage extends AppCompatActivity {
     //Запись данных в файл.
     protected void writeToFile(String text)
     {
-        try {
-            text += '\n';
-            FileOutputStream fos = null;
-            fos = openFileOutput(FILE_NAME, MODE_APPEND);
-            fos.write(text.getBytes("UTF8"));
+        text += '\n';
+        try (FileOutputStream fos = openFileOutput(FILE_NAME, MODE_APPEND)){
+            fos.write(text.getBytes(StandardCharsets.UTF_8));
             lines_archive++;
         }
         catch(IOException ex) {
@@ -1010,13 +976,15 @@ public class InfoPage extends AppCompatActivity {
     protected void readCntLines()
     {
         try {
-            FileInputStream fin = openFileInput(FILE_NAME);
-            byte[] buffer = new byte[fin.available()];
-            // считаем файл в буфер
-            fin.read(buffer, 0, fin.available());
+            byte[] buffer;
+            try (FileInputStream fin = openFileInput(FILE_NAME)) {
+                buffer = new byte[fin.available()];
+                // считаем файл в буфер
+                fin.read(buffer, 0, fin.available());
+            }
             int linesCount = 0;
-            for(int i = 0; i < buffer.length;i++){
-                if (buffer[i] == '\n')
+            for (byte b : buffer) {
+                if (b == '\n')
                     linesCount++;
             }
             lines_archive = linesCount;         //Число не отправленных пакетов после включения программы
@@ -1028,6 +996,7 @@ public class InfoPage extends AppCompatActivity {
     }
 
     //Чтение последней строки файла. А затем ее удаление
+    @SuppressWarnings("SameParameterValue")
     private String readLastLine(String fileName) {
         List<String> lines = new ArrayList<>();
 
@@ -1056,43 +1025,17 @@ public class InfoPage extends AppCompatActivity {
             return lastLine;
 
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e("readLastLine", "ошибка чтения файла");
         }
 
         return null;
     }
 
 
-
-//    private static String readLastLine(File file) throws FileNotFoundException, IOException {
-//        String result = null;
-//        try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
-//            long startIdx = file.length();
-//            while (startIdx >= 0 && (result == null || result.length() == 0)) {
-//                raf.seek(startIdx);
-//                if (startIdx > 0)
-//                    raf.readLine();
-//                result = raf.readLine();
-//                startIdx--;
-//            }
-//            raf.setLength(file.length() - result.length());
-//        }
-//        return result;
-//    }
-
-    //Задать размер файлу
-    private  static void SetLen(int size)
-    {
-
-    }
-
-
     //Очистка файла
     protected void clearFile()
     {
-     try {
-            FileOutputStream fos = null;
-            fos = openFileOutput(FILE_NAME, MODE_PRIVATE);
+     try(FileOutputStream fos = openFileOutput(FILE_NAME, MODE_PRIVATE)) {
             fos.write(0);
         }
         catch(IOException ex) {
@@ -1124,11 +1067,11 @@ public class InfoPage extends AppCompatActivity {
             Connect.State_pack = Connect.RX_pack.PARAMS;
             if (!cbMoblity.isChecked())
             {
-                Connect.myPG.setParamOnOff((short) 0, (short)(1 << 10),'+');
+                myPG.setParamOnOff((short) 0, (short)(1 << 10),'+');
             }
             else
             {
-                Connect.myPG.setParamOnOff((short)0, (short)(1 << 10),'-');
+                myPG.setParamOnOff((short)0, (short)(1 << 10),'-');
             }
         }
 

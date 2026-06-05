@@ -6,8 +6,10 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.util.Log;
 
+import androidx.annotation.RequiresPermission;
 import androidx.core.app.ActivityCompat;
 
 import java.io.UnsupportedEncodingException;
@@ -17,7 +19,9 @@ import java.util.Set;
 
 public class PG414 {
 
-        private Context context;
+        private static PG414 instance;
+    @SuppressWarnings("FieldCanBeLocal")
+        private final Context context;
 
         public boolean HIDEMODE = false;        //режим работы без ПГ
         public long    zavod_mulage = 0;        //заводской номер из мак адреса
@@ -79,12 +83,15 @@ public class PG414 {
         public boolean localeRus;                             //Используется ли русский язык как локализация
 
         private int cachedErrorBits = 0;
-        private long[] lastErrorTime = new long[32];
+        private final long[] lastErrorTime = new long[32];
         private static final long ERROR_HOLD_TIME = 800; // 800 миллисекунд
 
+        private static final long DEDUP_INTERVAL_MS = 3000; // 3 секунды
+
         //Конструктор
-        public PG414(BluetoothGatt mBGT,  BluetoothGattCharacteristic Character)
+        private PG414(BluetoothGatt mBGT,  BluetoothGattCharacteristic Character, Context context)
         {
+            this.context = context.getApplicationContext();
             mBluetoothGatt = mBGT;                                                                  //получаем BLE GATT
             mCharacteristic = Character;                                                            //и характеристику
             zavod_number = 0;
@@ -95,15 +102,50 @@ public class PG414 {
             }
             if (HIDEMODE) zavod_number = zavod_mulage;
         }
+        // Публичный метод получения экземпляра
+        public static PG414 getInstance(BluetoothGatt mBGT, BluetoothGattCharacteristic Character, Context context) {
+            if (instance == null) {
+                synchronized (PG414.class) {
+                    if (instance == null) {
+                        instance = new PG414(mBGT, Character, context);
+                    }
+                }
+            } else {
+                // Если экземпляр уже существует, обновляем GATT и характеристику
+                instance.updateGatt(mBGT, Character);
+            }
+            return instance;
+        }
+
+        //метод получения экземпляра без параметров
+        public static PG414 getInstance() {
+            if (instance == null) {
+                throw new IllegalStateException("PG414 not initialized. Call getInstance(gatt, characteristic, context) first in Connect.");
+            }
+            return instance;
+        }
+
+        public static void removeInstance(){
+            instance = null;
+            Log.d("PG414", "Instance removed");
+        }
+
+        // Метод для обновления GATT и характеристики (при переподключении)
+        public void updateGatt(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+            if (gatt != null) {
+                this.mBluetoothGatt = gatt;
+            }
+            if (characteristic != null) {
+                this.mCharacteristic = characteristic;
+            }
+        }
+
 
         //Проверка, является ли русской текущая локаль
         public void set_locale(String text_locale)
         {
             char[] ch_locale = text_locale.toCharArray();
-            if (ch_locale[0] == 'r' && ch_locale[1] == 'u')
-                localeRus = true;
-            else
-                localeRus = false;
+            localeRus = ch_locale[0] == 'r' && ch_locale[1] == 'u';
         }
 
         public String[] array_of_Errors_RUS =
@@ -182,7 +224,8 @@ public class PG414 {
         /**********ФУНКЦИИ**********/
 
         //Запрос на чтение динмических параметров
-        public void setParamOnOff(short s1,short s2, char set)
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+        public void setParamOnOff(short s1, short s2, char set)
         {
             byte[] request = new  byte[10];
             //формируем запрос
@@ -196,9 +239,17 @@ public class PG414 {
             request[7] =(byte) (s2 >> 8);       //Установить или снять
             request[8] =(byte) '#';              //-------
             request[9] =(byte) 0x0D;
-            mCharacteristic.setValue(request);                          //заносим в характеристику
 
-            mBluetoothGatt.writeCharacteristic(mCharacteristic);
+            // Для Android 13 и новее используем новый API
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                int writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT;
+                mBluetoothGatt.writeCharacteristic(mCharacteristic, request, writeType);
+            }
+            // Для старых версий используем старый, проверенный способ
+            else {
+                mCharacteristic.setValue(request);                          //заносим в характеристику
+                mBluetoothGatt.writeCharacteristic(mCharacteristic);
+            }
         }
 
         public boolean parseParamOnOff(byte[] answer)
@@ -209,6 +260,7 @@ public class PG414 {
         }
 
         //Запрос на чтение динмических параметров
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         public void reqDyn()
         {
             byte[] request = new  byte[10];
@@ -219,18 +271,38 @@ public class PG414 {
             request[3] =(byte) 'P';
             request[4] =(byte) '#';              //-------
             request[5] =(byte) 0x0D;
-            mCharacteristic.setValue(request);                          //заносим в характеристику
-            mBluetoothGatt.writeCharacteristic(mCharacteristic);
+
+            StringBuilder sb = new StringBuilder();
+            for (byte b : request) {
+                sb.append(String.format("%02X ", b));
+            }
+            Log.d("BLE_SEND", "запрос: " + sb.toString());
+
+            // Для Android 13 и новее используем новый API
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                int writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT;
+                mBluetoothGatt.writeCharacteristic(mCharacteristic, request, writeType);
+            }
+            // Для старых версий используем старый, проверенный способ
+            else {
+                mCharacteristic.setValue(request);                          //заносим в характеристику
+                mBluetoothGatt.writeCharacteristic(mCharacteristic);
+            }
+
+
         }
 
         //Парсим прочитанные динамические параметры
         public void parseDyn(byte[] answer)
         {
-            if (answer.length < 21) return;
+            if (answer.length < 21){
+                Log.d("PG414", "Неправильный формат пакета");
+                return;
+            }
 
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < answer.length; i++) {
-                sb.append(String.format("%02X ", answer[i]));
+            for (byte b : answer) {
+                sb.append(String.format("%02X ", b));
             }
             Log.d("PG414", "Raw answer: " + sb.toString());
 
@@ -244,10 +316,12 @@ public class PG414 {
             }
             percent_charge = answer[20];
 
+
             updateErrorCache();
         }
 
         //Запрос на чтение параметров
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         public void reqParam(byte Number)
         {
             byte[] request = new  byte[10];
@@ -258,8 +332,17 @@ public class PG414 {
             request[3] =(byte) ('0' + Number);
             request[4] =(byte) '#';              //-------
             request[5] =(byte) 0x0D;
-            mCharacteristic.setValue(request);                          //заносим в характеристику
-            mBluetoothGatt.writeCharacteristic(mCharacteristic);
+
+            // Для Android 13 и новее используем новый API
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                int writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT;
+                mBluetoothGatt.writeCharacteristic(mCharacteristic, request, writeType);
+            }
+            // Для старых версий используем старый, проверенный способ
+            else {
+                mCharacteristic.setValue(request);                          //заносим в характеристику
+                mBluetoothGatt.writeCharacteristic(mCharacteristic);
+            }
         }
 
 //        определяем формат пакета
@@ -267,6 +350,7 @@ public class PG414 {
 
         // Вариант 1 — старый формат (структура сразу в [2])
         if (answer.length > 3 && (answer[2] == 1 || answer[2] == 2)) {
+            Log.d("DetectPacket", "shift = 0");
             return 0;
         }
 
@@ -284,6 +368,11 @@ public class PG414 {
         //Парсим конкретную структуру с номером "num_struct"
         public boolean parseParam(byte[] answer, byte num_struct) throws UnsupportedEncodingException {
             Log.d("RAW_BYTES", Arrays.toString(answer));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : answer) {
+                sb.append(String.format("%02X ", b));
+            }
+            Log.d("PG414", "Raw answer: " + sb.toString());
             Log.d("RAW_TEXT", new String(answer));
             int shift = detectPacketOffset(answer);
 
@@ -310,11 +399,10 @@ public class PG414 {
                     i = (byte)(shift + 8);
 
                     // универсальный парсинг номера
-                    long parsed =
-                            ((answer[shift + 7] & 0xFF) << 24) |
-                                    ((answer[shift + 6] & 0xFF) << 16) |
-                                    ((answer[shift + 5] & 0xFF) << 8) |
-                                    (answer[shift + 4] & 0xFF);
+                    long parsed = ((long)(answer[shift + 7] & 0xFF) << 24) |
+                            ((answer[shift + 6] & 0xFF) << 16) |
+                            ((answer[shift + 5] & 0xFF) << 8) |
+                            (answer[shift + 4] & 0xFF);
 
                     if (parsed != 0) {
                         zavod_number = parsed;
@@ -440,6 +528,14 @@ public class PG414 {
                 ((state[1] & 0xFF) << 8) |
                 ((state[2] & 0xFF) << 16) |
                 ((state[3] & 0xFF) << 24);
+
+        // ФИЛЬТРАЦИЯ: если есть второй порог, убираем первый
+        if ((currentBits & 0x02) != 0) {
+            currentBits = currentBits & ~0x01; // сбрасываем бит 0
+            Log.d("FILTER", "Второй порог активен, первый порог удалён. Новые биты: 0x" +
+                    Integer.toHexString(currentBits));
+        }
+
         long now = System.currentTimeMillis();
 
         for (int i = 0; i < 32; i++)
@@ -480,12 +576,13 @@ public class PG414 {
                 }
             } catch (Exception ex)
             {
-
+                Log.d("PG414", "clean_text error");
             }
         }
 
 
     //Чтение характеристики
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         public void startRead()
         {
             mBluetoothGatt.readCharacteristic(mCharacteristic);
