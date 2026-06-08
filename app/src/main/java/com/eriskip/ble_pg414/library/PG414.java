@@ -295,16 +295,16 @@ public class PG414 {
         //Парсим прочитанные динамические параметры
         public void parseDyn(byte[] answer)
         {
-            if (answer.length < 21){
-                Log.d("PG414", "Неправильный формат пакета");
-                return;
-            }
-
             StringBuilder sb = new StringBuilder();
             for (byte b : answer) {
                 sb.append(String.format("%02X ", b));
             }
             Log.d("PG414", "Raw answer: " + sb.toString());
+
+            if (answer.length < 21){
+                Log.d("PG414", "Неправильный формат пакета");
+                return;
+            }
 
             conc1 = ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF);       //текущая концентрация по 1 каналу
             conc2 = ((answer[7]  & 0xFF) << 8) + (answer[6]  & 0xFF);       //текущая концентрация по 2 каналу

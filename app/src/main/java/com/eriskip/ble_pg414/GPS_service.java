@@ -6,10 +6,12 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -50,7 +52,15 @@ public class GPS_service extends Service {
 
         Notification notification = builder.build();
 
-        this.startForeground(196, notification);             //показываем сообщение
+        // Для разных версий Android используем разные вызовы
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10+ (API 29+): указываем тип сервиса
+            this.startForeground(196, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);      //показываем сообщение
+        } else {
+            // Android 9 и ниже (API 28-): достаточно двух параметров
+            this.startForeground(196, notification);
+        }
+
 
         //слушатель - он будет ждать когда изменятся координаты и отправит их пользователю
         listener = new LocationListener() {

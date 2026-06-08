@@ -136,6 +136,7 @@ public class InfoPage extends AppCompatActivity {
         stopService(new Intent(this, GPS_service.class));
         handler.removeCallbacksAndMessages(null);
         serverHandler.removeCallbacksAndMessages(null);
+        dynReadHandler.removeCallbacksAndMessages(null);
         stop_dyn = true;
         PG414.removeInstance();
 
@@ -266,7 +267,7 @@ public class InfoPage extends AppCompatActivity {
             arch_alert.setVisibility(View.INVISIBLE);
         }
 
-        readDynParam = new Thread(runnableDynTask);
+//        readDynParam = new Thread(runnableDynTask);
         //Делаем так что сервис будет запускаться в любом случае, а не только при сне
          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
              startForegroundService(new Intent(this, GPS_service.class));
@@ -284,7 +285,7 @@ public class InfoPage extends AppCompatActivity {
         fonValRefreshStart();
         if (!Connect.offline) {
 
-            readDynParam.start(); //TaskDynRead
+            startDynRead();   //запускаем чтение динамики
         }
 
         startServerTimer();
@@ -347,36 +348,39 @@ public class InfoPage extends AppCompatActivity {
     static public boolean stop_dyn;     //отключить динамическое чтение
 
     /* Поток чтения динамических параметров */
-    Runnable runnableDynTask = new Runnable() {
-        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-        public void run() {
-            try {
-                while (true) {
+    private final Handler dynReadHandler = new Handler(Looper.getMainLooper());
 
-                    if (stop_dyn) return;
-                    //Если не пришла команда паузы чтения
-                    if (!Connect.read_pause) {
-                        if (Connect.State_pack == Connect.RX_pack.COMPLETE )
-                        {
-                            connToDev = 0;
-                            connect_device = true;
-                        }
-                        Log.d("ПГ-414","Делаю запрос");
-                        //Чтение статуса
-                        myPG.reqDyn();
-                        Connect.State_pack = Connect.RX_pack.DYNPARAM;
-                        Thread.sleep(2300);
+    private void startDynRead(){
+        dynReadHandler.postDelayed(new Runnable() {
+            @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+            @Override
+            public void run() {
+                if (stop_dyn) return;
+
+                if (!Connect.read_pause) {
+                    if (Connect.State_pack == Connect.RX_pack.COMPLETE) {
+                        connToDev = 0;
+                        connect_device = true;
+                    }
+
+                    Log.d("ПГ-414", "Делаю запрос");
+                    Connect.State_pack = Connect.RX_pack.DYNPARAM;
+                    myPG.reqDyn();
+
+                    // Отложенное продолжение вместо Thread.sleep
+                    handler.postDelayed(() -> {
                         if (stop_dyn) return;
+
                         myPG.startRead();
-                        //noinspection StatementWithEmptyBody
-                        while (Connect.State_pack != Connect.RX_pack.COMPLETE && abort_counter < 5)
-                            ;                      //ждем пока не прочтется
 
-                        Log.d("InfoPage", abort_counter + " " +  Connect.State_pack);
+                        // Ожидание с таймаутом
+                        waitForCompletion(5000);
 
-                        if (abort_counter >= 5 && Connect.State_pack != Connect.RX_pack.COMPLETE)
-                            Log.d("ПГ-414","Не могу достучаться " + connToDev);
-                        else {
+                        Log.d("InfoPage", abort_counter + " " + Connect.State_pack);
+
+                        if (abort_counter >= 5 && Connect.State_pack != Connect.RX_pack.COMPLETE) {
+                            Log.d("ПГ-414", "Не могу достучаться " + connToDev);
+                        } else {
                             Log.d("ПГ-414", "Прочитал");
                             connToDev = 0;
                         }
@@ -384,14 +388,71 @@ public class InfoPage extends AppCompatActivity {
                         abort_counter = 0;
                         cnt_con = true;
 
-                    }
+                    }, 2300);
                 }
 
+                // Планируем следующий запуск
+                handler.postDelayed(this, 500);
+
+            }
+        }, 0);
+    }
+
+    private void waitForCompletion(int timeout) {
+        long start = System.currentTimeMillis();
+        while (Connect.State_pack != Connect.RX_pack.COMPLETE && System.currentTimeMillis() - start < timeout) {
+            try {
+                Thread.sleep(50);
             } catch (InterruptedException e) {
-                Log.e("InfoPage", "Runnable error");
+                break;
             }
         }
-    };
+    }
+//    Runnable runnableDynTask = new Runnable() {
+//        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+//        public void run() {
+//            try {
+//                while (true) {
+//
+//                    if (stop_dyn) return;
+//                    //Если не пришла команда паузы чтения
+//                    if (!Connect.read_pause) {
+//                        if (Connect.State_pack == Connect.RX_pack.COMPLETE )
+//                        {
+//                            connToDev = 0;
+//                            connect_device = true;
+//                        }
+//                        Log.d("ПГ-414","Делаю запрос");
+//                        //Чтение статуса
+//                        myPG.reqDyn();
+//                        Connect.State_pack = Connect.RX_pack.DYNPARAM;
+//                        Thread.sleep(2300);
+//                        if (stop_dyn) return;
+//                        myPG.startRead();
+//                        //noinspection StatementWithEmptyBody
+//                        while (Connect.State_pack != Connect.RX_pack.COMPLETE && abort_counter < 5)
+//                            ;                      //ждем пока не прочтется
+//
+//                        Log.d("InfoPage", abort_counter + " " +  Connect.State_pack);
+//
+//                        if (abort_counter >= 5 && Connect.State_pack != Connect.RX_pack.COMPLETE)
+//                            Log.d("ПГ-414","Не могу достучаться " + connToDev);
+//                        else {
+//                            Log.d("ПГ-414", "Прочитал");
+//                            connToDev = 0;
+//                        }
+//
+//                        abort_counter = 0;
+//                        cnt_con = true;
+//
+//                    }
+//                }
+//
+//            } catch (InterruptedException e) {
+//                Log.e("InfoPage", "Runnable error");
+//            }
+//        }
+//    };
         byte abort_counter = 0;
 
         ///Таймер для обновления графического интерфейса в зависимости от показаний
@@ -745,21 +806,21 @@ public class InfoPage extends AppCompatActivity {
     }
 
 
-         public void send_message_to_server(Sending parametr)
-         {
-             Send_Message = parametr;
-         }
+     public void send_message_to_server(Sending parametr)
+     {
+         Send_Message = parametr;
+     }
 
 
-         public void backToConnect(View v){
-             onBackPressed();
-         }
+     public void backToConnect(View v){
+         onBackPressed();
+     }
 
 
     //Ввод адреса сервера
     public  void enterServer(View v)
     {
-    try {
+        try {
             AlertDialog.Builder alert = new AlertDialog.Builder(InfoPage.this, R.style.AlertDialogCustom);
 
             alert.setTitle(getString(R.string.Config_but));
@@ -787,11 +848,11 @@ public class InfoPage extends AppCompatActivity {
             alert.show();
 
         }
-        catch (Exception ex)
-        {
-            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+            catch (Exception ex)
+            {
+                Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+            }
         }
-    }
 
     //*******************TEST ZONE***************************
     //Вывод окна для запроса очистки файла
@@ -1060,6 +1121,7 @@ public class InfoPage extends AppCompatActivity {
     }
     ///
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private void setCheck()
     {
         if(!Connect.offline && !Connect.hideMode){

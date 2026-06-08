@@ -40,6 +40,7 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -102,6 +103,8 @@ public class Connect extends AppCompatActivity {
     private boolean isConnecting = false;
     private byte bluetooth_en  = 0;                                                     // включен ли блютуз
 
+    private boolean servicesDiscovered = false;
+
     static final private int CHOOSE_THIEF = 0;                                          // для определения статуса дочерней активити
 
     public byte numParams = 1;                                                          // номер считываемого параметра
@@ -149,8 +152,6 @@ public class Connect extends AppCompatActivity {
         {
             read_pause = true;
             bluetooth_en = 1;
-
-            close();
         }
 
     }
@@ -307,22 +308,21 @@ public class Connect extends AppCompatActivity {
     //Функция выводи сообщение о необходимости отключения энергосбережения
     private void Set_Battery()
     {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {  // API 23+
-            AlertDialog.Builder alert = new AlertDialog.Builder(this, R.style.AlertDialogCustom);
+        AlertDialog.Builder alert = new AlertDialog.Builder(this, R.style.AlertDialogCustom);
 
-            alert.setTitle(getString(R.string.info));
-            alert.setMessage(getString(R.string.Message_powermanage));
-            alert.setPositiveButton("Ok", (dialog, whichButton) -> {
-                Intent enableIntent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
-                startActivity(enableIntent);
-            });
+        alert.setTitle(getString(R.string.info));
+        alert.setMessage(getString(R.string.Message_powermanage));
+        alert.setPositiveButton("Ok", (dialog, whichButton) -> {
+            Intent enableIntent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            startActivity(enableIntent);
+        });
 
-            alert.setNegativeButton("Cancel", (dialog, whichButton) -> {
-                // Canceled.
-            });
+        alert.setNegativeButton("Cancel", (dialog, whichButton) -> {
+            // Canceled.
+        });
 
-            alert.show();
-        }
+        alert.show();
+
     }
 
     String currentDevice = "";
@@ -537,7 +537,7 @@ public class Connect extends AppCompatActivity {
                         return;
                     }
                 }
-
+//                gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_BALANCED);
                 mBluetoothGatt.discoverServices();
 
             } else if (newState == STATE_DISCONNECTED) {
@@ -546,7 +546,9 @@ public class Connect extends AppCompatActivity {
                 showMessageForDisconnect();
                 Log.i(TAG, "Disconnected from GATT server.");
                 broadcastUpdate(intentAction);
+                close();
             }
+
         }
 
         //При нахождении сервисов
@@ -554,7 +556,7 @@ public class Connect extends AppCompatActivity {
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             super.onServicesDiscovered(gatt, status);
             Log.d(TAG, "onServicesDiscovered " + status);
-
+            servicesDiscovered = true;
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED);
             } else {
@@ -769,13 +771,13 @@ public class Connect extends AppCompatActivity {
 
                     mBluetoothGatt = Current_Device.connectGatt(
                             Connect.this,
-                            true,
+                            false,
                             bluetoothGattCallback
                     );
                     //Ожидание после подключения
-                    Thread.sleep(1500);
+                    Thread.sleep(500);
 
-                    List<BluetoothGattService> BLEList;
+                    List<BluetoothGattService> BLEList = new ArrayList<>();
                     State_of_connection = getResources().getString(R.string.services_search);
                     handler.sendEmptyMessage(1);
                     //Переподключаемся пока не произойдет подключения( 5 попыток)
@@ -783,14 +785,16 @@ public class Connect extends AppCompatActivity {
                     do {
                         BLEList = getSupportedGattServices();
                         z++;
+
                         if (BLEList.isEmpty()) {
+
                             if (mBluetoothGatt == null) {
-                                mBluetoothGatt = Current_Device.connectGatt(Connect.this, true, bluetoothGattCallback);
-                                Log.d("runnable connect", "reconnect " + mBluetoothGatt);
+                                mBluetoothGatt = Current_Device.connectGatt(Connect.this, false, bluetoothGattCallback);
                             }
-                            Thread.sleep(1500);
+                            Thread.sleep(2000);
                         }
-                        Log.d(TAG, "BLEList ITEMS:" + BLEList.size());
+                        Log.d(TAG, "BLEList ITEMS:" + BLEList.size() + " гад: " + mBluetoothGatt);
+
                     }
                     while ((BLEList.isEmpty()) && (z < 5));
 
@@ -804,7 +808,6 @@ public class Connect extends AppCompatActivity {
                     } else {
                         State_of_connection = getResources().getString(R.string.params_reading);
                         handler.sendEmptyMessage(1);
-
                     }
 
                     try {
@@ -848,6 +851,7 @@ public class Connect extends AppCompatActivity {
                         if(p >= 10){
                             be_connect = false;
                             Log.d("runnable connect", "ошибка чтения динамики");
+                            handler.sendEmptyMessage(1);
                             return;
                         }
                         handler.sendEmptyMessage(1);
@@ -956,10 +960,7 @@ public class Connect extends AppCompatActivity {
 
         //  Если есть что запрашивать
         if (!permissionsNeeded.isEmpty()) {
-
-            // Нужно ли объяснение
             boolean showRationale = false;
-
             for (String perm : permissionsNeeded) {
                 if (ActivityCompat.shouldShowRequestPermissionRationale(this, perm)) {
                     showRationale = true;
@@ -968,20 +969,35 @@ public class Connect extends AppCompatActivity {
             }
 
             if (showRationale) {
-                new AlertDialog.Builder(this)
+                AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.AlertDialogCustom)
                         .setTitle("Требуются разрешения")
-                        .setMessage("Для работы Bluetooth и GPS необходимо предоставить разрешения")
-                        .setPositiveButton("OK", (dialog, which) -> ActivityCompat.requestPermissions(
-                                Connect.this,
-                                permissionsNeeded.toArray(new String[0]),
-                                MY_PERMISSIONS_REQUEST_LOCATION
-                        ))
-                        .create()
-                        .show();
+                        .setMessage("Для работы Bluetooth и GPS необходимо предоставить разрешения:\n" +
+                                TextUtils.join("\n", permissionsNeeded))
+                        .setPositiveButton("OK", (dialog, which) -> {
+                            Log.d("PERMISSION", "Пользователь согласился");
+                            // Запрос разрешений
+                            String[] permissionsArray = permissionsNeeded.toArray(new String[0]);
+                            ActivityCompat.requestPermissions(
+                                    Connect.this,
+                                    permissionsArray,
+                                    MY_PERMISSIONS_REQUEST_LOCATION
+                            );
+                        })
+                        .setNegativeButton("Отмена", (dialog, which) -> {
+                            Log.d("PERMISSION", "Пользователь отказался");
+                            dialog.dismiss();
+                        });
+
+                AlertDialog dialog = builder.create();
+                dialog.show();
+                Log.d("PERMISSION", "Диалог показан");
             } else {
+                Log.d("checkPermissions", "showRational = false");
+                // Если rationale не нужен, сразу запрашиваем
+                String[] permissionsArray = permissionsNeeded.toArray(new String[0]);
                 ActivityCompat.requestPermissions(
                         this,
-                        permissionsNeeded.toArray(new String[0]),
+                        permissionsArray,
                         MY_PERMISSIONS_REQUEST_LOCATION
                 );
             }
