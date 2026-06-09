@@ -114,6 +114,7 @@ public class Connect extends AppCompatActivity {
 
     private int taps = 0;                                                               // колчество нажатий на экран
     private long lastTap = 0;
+    private boolean disconnectFromUser = false;
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -142,6 +143,7 @@ public class Connect extends AppCompatActivity {
                 if (btScanner != null)
                     btScanner.stopScan(leScanCallback);
 
+                disconnectFromUser = true;
                 peripheralTextView.setText(getString(R.string.Get_connect));
             }
         }catch (Exception ex)
@@ -543,7 +545,9 @@ public class Connect extends AppCompatActivity {
             } else if (newState == STATE_DISCONNECTED) {
                 intentAction = ACTION_GATT_DISCONNECTED;
                 mConnectionState = STATE_DISCONNECTED;
-                showMessageForDisconnect();
+                if(disconnectFromUser){
+                    showMessageForDisconnect();
+                }
                 Log.i(TAG, "Disconnected from GATT server.");
                 broadcastUpdate(intentAction);
                 close();

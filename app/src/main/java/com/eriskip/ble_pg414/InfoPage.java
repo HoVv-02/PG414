@@ -367,32 +367,38 @@ public class InfoPage extends AppCompatActivity {
                     Connect.State_pack = Connect.RX_pack.DYNPARAM;
                     myPG.reqDyn();
 
-                    // Отложенное продолжение вместо Thread.sleep
-                    handler.postDelayed(() -> {
-                        if (stop_dyn) return;
+                    try {
+                        Thread.sleep(2300);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
 
-                        myPG.startRead();
+                    if (stop_dyn) return;
 
-                        // Ожидание с таймаутом
-                        waitForCompletion(5000);
+                    myPG.startRead();
 
-                        Log.d("InfoPage", abort_counter + " " + Connect.State_pack);
+                    // Ожидание с таймаутом
+                    waitForCompletion(5000);
 
-                        if (abort_counter >= 5 && Connect.State_pack != Connect.RX_pack.COMPLETE) {
-                            Log.d("ПГ-414", "Не могу достучаться " + connToDev);
-                        } else {
-                            Log.d("ПГ-414", "Прочитал");
-                            connToDev = 0;
-                        }
+                    Log.d("InfoPage", abort_counter + " " + Connect.State_pack);
 
-                        abort_counter = 0;
-                        cnt_con = true;
+                    if (abort_counter >= 5 && Connect.State_pack != Connect.RX_pack.COMPLETE) {
+                        Log.d("ПГ-414", "Не могу достучаться " + connToDev);
+                    } else {
+                        Log.d("ПГ-414", "Прочитал");
+                        connToDev = 0;
+                    }
 
-                    }, 2300);
+                    abort_counter = 0;
+                    cnt_con = true;
+
                 }
 
                 // Планируем следующий запуск
-                handler.postDelayed(this, 500);
+                if (!stop_dyn) {
+                    dynReadHandler.postDelayed(this, 500);
+                }
 
             }
         }, 0);
@@ -980,7 +986,7 @@ public class InfoPage extends AppCompatActivity {
 
                      JSONObject gps = new JSONObject();
 
-                     object.put("state", "Archive: " + myPG.status);
+                     object.put("state",  myPG.status);
 
                      object.put("gaz_type1", myPG.gazType[0]);
                      object.put("conc1", Double.parseDouble(tconc1.getText().toString().replace(',', '.')));
