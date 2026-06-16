@@ -150,18 +150,18 @@ public class PG414 {
 
         public String[] array_of_Errors_RUS =
                 {
-                        "Порог 1 - CH4",                                                       //0
-                        "Порог 2 - CH4",                                                       //1
-                        "Превышение диапазона - CH4",                                          //2
-                        "Порог 1 - O2",                                                       //3
-                        "Порог 2 - O2",                                                       //4
-                        "Превышение диапазона - O2",                                          //5
-                        "Порог 1 - H2S",                                                       //6
-                        "Порог 2 - H2S",                                                       //7
-                        "Превышение диапазона - H2S",                                          //8
-                        "Порог 1 - CO",                                                       //9
-                        "Порог 2 - CO",                                                       //10
-                        "Превышение диапазона - CO",                                          //11
+                        "Порог 1 - Канал 1",                                                       //0
+                        "Порог 2 - Канал 1",                                                       //1
+                        "Превышение диапазона - Канал 1",                                          //2
+                        "Порог 1 - Канал 2",                                                       //3
+                        "Порог 2 - Канал 2",                                                       //4
+                        "Превышение диапазона - Канал 2",                                          //5
+                        "Порог 1 - Канал 3",                                                       //6
+                        "Порог 2 - Канал 3",                                                       //7
+                        "Превышение диапазона - Канал 3",                                          //8
+                        "Порог 1 - Канал 4",                                                       //9
+                        "Порог 2 - Канал 4",                                                       //10
+                        "Превышение диапазона - Канал 4",                                          //11
                         "Порог 1 - Сенсор 5",                                                       //12
                         "Порог 2 - Сенсор 5",                                                       //13
                         "Превышение диапазона - Сенсор 5",                                          //14
@@ -314,7 +314,7 @@ public class PG414 {
             {
                 state[x] = answer[12 + x];
             }
-            percent_charge = answer[20];
+            percent_charge = answer[21];
 
 
             updateErrorCache();
@@ -481,8 +481,19 @@ public class PG414 {
         Set<String> result = new LinkedHashSet<>();
 
         // Обрабатываем каждый сенсор
-        for (int sensor = 0; sensor < 5; sensor++)
+        for (int sensor = 0; sensor < 4; sensor++)
         {
+
+            if(localeRus){
+                array_of_Errors_RUS[sensor * 3] = "Порог 1 - " + gazType[sensor];
+                array_of_Errors_RUS[sensor * 3 + 1] = "Порог 2 - " + gazType[sensor];
+                array_of_Errors_RUS[sensor * 3 + 2] = "Превышение диапазона - " + gazType[sensor];
+            }else {
+                array_of_Errors_EN[sensor * 3] = "Alarm 1 - " + gazType[sensor];
+                array_of_Errors_EN[sensor * 3 + 1] = "Alarm 2 - " + gazType[sensor];
+                array_of_Errors_EN[sensor * 3 + 2] = "Over range - " + gazType[sensor];
+            }
+
             String firstThreshold = localeRus ?
                     array_of_Errors_RUS[sensor * 3] :
                     array_of_Errors_EN[sensor * 3];
@@ -494,6 +505,7 @@ public class PG414 {
             String rangeExceed = localeRus ?
                     array_of_Errors_RUS[sensor * 3 + 2] :
                     array_of_Errors_EN[sensor * 3 + 2];
+
 
             // Приоритет: Превышение диапазона > Второй порог > Первый порог
             if (errors.contains(rangeExceed))
@@ -508,6 +520,8 @@ public class PG414 {
             {
                 result.add(firstThreshold);  // Показываем только первый порог
             }
+
+
         }
 
         // Добавляем системные ошибки (не связанные с порогами)
