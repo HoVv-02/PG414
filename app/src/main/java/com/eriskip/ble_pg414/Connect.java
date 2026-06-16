@@ -192,11 +192,9 @@ public class Connect extends AppCompatActivity {
         // Получаем сервер подключения
         Server ="http://erc.eriskip.ru/api/listeners/packages.php";
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-            if (!pm.isIgnoringBatteryOptimizations(getPackageName())) {
-                Set_Battery();  // запускаем диалог
-            }
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        if (!pm.isIgnoringBatteryOptimizations(getPackageName())) {
+            Set_Battery();  // запускаем диалог
         }
 
         editor = mSettings.edit();
