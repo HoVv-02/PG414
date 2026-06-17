@@ -245,7 +245,15 @@ public class Connect extends AppCompatActivity {
         checkPermissions();          //запрос разрешений
         //Список найденных устройств
         deviceList =  findViewById(R.id.list_devices);
-        deviceList.setOnItemClickListener((adapterView, view, i, l) -> Connect_to_BLE(i));
+        deviceList.setOnItemClickListener((adapterView, view, i, l) -> {
+            breaker = true;
+            if (connectThread != null) {
+                connectThread.interrupt();
+                connectThread = null;
+            }
+            close();
+            Connect_to_BLE(i);
+        });
 
         //Для вывода на экран статуса подключения
         handler = new Handler(Looper.getMainLooper()) {
@@ -265,6 +273,7 @@ public class Connect extends AppCompatActivity {
                     stateText.setVisibility(View.INVISIBLE);
                     offline = false;
                     startScanningButton.setVisibility(View.VISIBLE);
+                    Log.d("HandlerConnect", "Открываю активити" + mBluetoothGatt);
                     Intent intent = new Intent(Connect.this, InfoPage.class);
                     intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                     startActivityForResult(intent, CHOOSE_THIEF);
@@ -450,6 +459,7 @@ public class Connect extends AppCompatActivity {
 
     //текущий элемент к которому будет совершено подключение
     private int index;
+    Thread connectThread;
 
     //Подключение к выбранному BLE устройству
     public void Connect_to_BLE(int ind)
@@ -459,11 +469,12 @@ public class Connect extends AppCompatActivity {
             be_connect = false;
         }
 
+        isConnecting = true;
+
         index = ind;
         /*Запускаем  поток*/
-        Thread thread = new Thread(runnable_connect);
-        thread.start();
-        isConnecting = true;
+        connectThread = new Thread(runnable_connect);
+        connectThread.start();
         pgBar.setVisibility(View.VISIBLE);
         stateText.setVisibility(View.VISIBLE);
         stateText.setText(R.string.connect);
@@ -675,6 +686,7 @@ public class Connect extends AppCompatActivity {
                     read_pause = false;
                     if (myPG.parseParamOnOff(rec_value))                         //парсим структуру
                     {
+                        Log.d("parse", "считаны переключаемые параметры");
                         trueRead = true;
                         State_of_connection = getResources().getString(R.string.read_params_compl);
                     }
@@ -698,11 +710,12 @@ public class Connect extends AppCompatActivity {
             return;
         }
         try {
+            mBluetoothGatt.disconnect();
             mBluetoothGatt.close();
+            mBluetoothGatt = null;
         } catch (Exception e) {
             Log.d("BLE", "Error closing GATT: " + e);
         }
-        myPG.mBluetoothGatt = null;
     }
 
     //Считать данные
@@ -770,12 +783,13 @@ public class Connect extends AppCompatActivity {
                             return;
                         }
 
-
                     mBluetoothGatt = Current_Device.connectGatt(
                             Connect.this,
                             false,
                             bluetoothGattCallback
                     );
+
+                    if(breaker) return;
                     //Ожидание после подключения
                     Thread.sleep(500);
 
@@ -793,6 +807,7 @@ public class Connect extends AppCompatActivity {
                             if (mBluetoothGatt == null) {
                                 mBluetoothGatt = Current_Device.connectGatt(Connect.this, false, bluetoothGattCallback);
                             }
+                            if (breaker) return;
                             Thread.sleep(2000);
                         }
                         Log.d(TAG, "BLEList ITEMS:" + BLEList.size() + " гад: " + mBluetoothGatt);
@@ -894,6 +909,7 @@ public class Connect extends AppCompatActivity {
                         handler.sendEmptyMessage(1);
                     }
                 } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                         Log.e("TAG", "Ошибка при выполнении операции Runnable Connect", e);
                 }
             }
