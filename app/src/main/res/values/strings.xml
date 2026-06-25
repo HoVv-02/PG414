@@ -4,6 +4,7 @@
     <string name="Zavod">Serial number:</string>
     <string name="Coord">Coords</string>
     <string name="Charge">Battery:</string>
+    <string name="Temperature">Temperature:</string>
     <string name="state">State:</string>
     <string name="err_adapter">Error adapter</string>
     <string name="start_scan">Start scanning...</string>
@@ -17,7 +18,8 @@
     <string name="read_params_compl">Reading parametrs completed</string>
     <string name="un_package">Unknown package</string>
     <string name="info_read">Reading info completed</string>
-    <string name="err_conncet">Connect error</string>
+    <string name="err_connect">Connect error</string>
+    <string name="con_restored">Connection restored</string>
     <string name="h2s">H2S, ppm</string>
     <string name="co">CO, ppm</string>
     <string name="o2">O2, %VOL</string>

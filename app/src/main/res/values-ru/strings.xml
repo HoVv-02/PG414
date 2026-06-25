@@ -4,6 +4,7 @@
     <string name="Zavod">Заводской номер:</string>
     <string name="Coord">Координаты</string>
     <string name="Charge">Заряд батареи:</string>
+    <string name="Temperature">Температура:</string>
     <string name="state">Состояние:</string>
     <string name="err_adapter">Ошибка адаптера</string>
     <string name="start_scan">Сканирование началось...</string>
@@ -17,7 +18,8 @@
     <string name="read_params_compl">Параметры успешно считаны</string>
     <string name="un_package">Неизвестный пакет</string>
     <string name="info_read">Информация считана</string>
-    <string name="err_conncet">Ошибка подключения</string>
+    <string name="err_connect">Ошибка подключения</string>
+    <string name="con_restored">Соединение восстановлено</string>
     <string name="h2s">H2S, ppm</string>
     <string name="co">CO, ppm</string>
     <string name="o2">O2, %об.д.</string>

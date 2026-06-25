@@ -2,6 +2,7 @@ package com.eriskip.ble_pg414;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -53,6 +54,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -61,6 +63,7 @@ import com.eriskip.ble_pg414.library.PG414;
 import com.eriskip.ble_pg414.library.SampleGattAttributes;
 
 import static android.app.Notification.VISIBILITY_PUBLIC;
+import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
 public class Connect extends AppCompatActivity {
@@ -84,6 +87,12 @@ public class Connect extends AppCompatActivity {
     public static boolean offline;                                                      // оффлайн режим работы
     public static boolean read_pause = false;                                           // пауза в чтении
 
+    private static Handler infoHandler;
+
+    public static void setHandler(Handler handler) {
+        infoHandler = handler;
+    }
+
     public static PG414 myPG;                                                           // объект класса ПГ-414
     //>>>>>> UI  -------------------------------------------------------------------------------------------------------
     Button startScanningButton;                                                         // кнопка старт
@@ -95,32 +104,46 @@ public class Connect extends AppCompatActivity {
     //------------------------------------------------------------------------------------------------------------------
     private final static int REQUEST_ENABLE_BT = 1;                                     // статус открытия доступа к блютуз
     private final List<String> DeviceList = new ArrayList<>();                                // массив имен найденых устройств
-    public List<BluetoothDevice> BLElist = new ArrayList <>();                          // массив устройств
+    public static List<BluetoothDevice> BLElist = new ArrayList <>();                          // массив устройств
 
     public static RX_pack State_pack;                                                   // ожидаемый пакет
 
     private boolean be_connect = false;                                                 // есть ли подключение
     private boolean isConnecting = false;
-    private byte bluetooth_en  = 0;                                                     // включен ли блютуз
+    private boolean bluetooth_en  = false;                                                     // включен ли блютуз
 
     private boolean servicesDiscovered = false;
 
     static final private int CHOOSE_THIEF = 0;                                          // для определения статуса дочерней активити
 
     public byte numParams = 1;                                                          // номер считываемого параметра
-    public boolean breaker = false;                                                     // при сработке обрывает фоновый поток
+    public volatile static boolean breaker = false;                                                     // при сработке обрывает фоновый поток
 
     public boolean trueRead = false;                                                    // успешное считывание параметров
 
     private int taps = 0;                                                               // колчество нажатий на экран
     private long lastTap = 0;
-    private boolean disconnectFromUser = false;
+    private boolean disconnectFromUser = false;                                         //пользователь сам нажал Отключиться
+    public static boolean isReconnecting = false;                                       //идет переподключение
+    private static InfoPage infoPageRef;
+
+    // Регистрация InfoPage
+    public static void setInfoPage(InfoPage page) {
+        infoPageRef = page;
+    }
+    // Получение целевой Activity для запроса разрешений
+    private Activity getTargetActivity() {
+        if (isReconnecting && infoPageRef != null && !infoPageRef.isFinishing()) {
+            return infoPageRef;  // используем InfoPage
+        }
+        return this;  // используем Connect
+    }
+
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
           super.onActivityResult(requestCode, resultCode, data);
         try {
-            InfoPage.stop_dyn = true;
             if (myPG != null) {
                 Log.d(TAG, "Отключаемся");
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -137,24 +160,29 @@ public class Connect extends AppCompatActivity {
                     }
                 }
 
-                myPG.mBluetoothGatt.disconnect();
-                myPG.mBluetoothGatt.close();
-                myPG.mBluetoothGatt = null;
+                if (!hideMode) {
+                    close();
+                }else{
+                    hideMode = false;
+                    Log.d("onActivityresult", "hidemode отключен");
+                }
                 if (btScanner != null)
                     btScanner.stopScan(leScanCallback);
 
                 disconnectFromUser = true;
                 peripheralTextView.setText(getString(R.string.Get_connect));
+                stopScanningButton.setVisibility(View.INVISIBLE);
+
             }
         }catch (Exception ex)
         {
             Log.d(TAG, "Error close connection: " + ex);
         }
-        if (resultCode == RESULT_CANCELED)
-        {
-            read_pause = true;
-            bluetooth_en = 1;
+
+        if (requestCode == REQUEST_ENABLE_BT) {
+            bluetooth_en = (resultCode == RESULT_OK);
         }
+
 
     }
 
@@ -174,8 +202,14 @@ public class Connect extends AppCompatActivity {
                 taps++;
                 lastTap = now;
                 if (taps >= 8) {
-                    Toast.makeText(this, "Hidemode активирован", Toast.LENGTH_SHORT).show();
-                    hideMode = true;
+                    if(!hideMode){
+                        hideMode = true;
+                        Toast.makeText(this, "Hidemode активирован", Toast.LENGTH_SHORT).show();
+                    }else{
+                        hideMode = false;
+                        Toast.makeText(this, "Hidemode отключен", Toast.LENGTH_SHORT).show();
+                    }
+
                     taps = 0;
                 }
                 return true;
@@ -219,12 +253,18 @@ public class Connect extends AppCompatActivity {
 
         //кнопка начать сканирование
         startScanningButton =  findViewById(R.id.ble_button);
-        startScanningButton.setOnClickListener((View v) -> startScanning());
+        startScanningButton.setOnClickListener((View v) -> {
+            if(!btAdapter.isEnabled()){
+                Toast.makeText(this, "Для работы приложения необходимо включить Bluetooth", Toast.LENGTH_SHORT).show();
+            }else{
+                startScanning();
+            }
+        });
 
         //кнопка остановить сканирование
         stopScanningButton =  findViewById(R.id.ble_stop);
         stopScanningButton.setOnClickListener(v -> {
-            breaker = true;
+//            breaker = true;
             stopScanning();
         });
         stopScanningButton.setVisibility(View.INVISIBLE);
@@ -246,13 +286,17 @@ public class Connect extends AppCompatActivity {
         //Список найденных устройств
         deviceList =  findViewById(R.id.list_devices);
         deviceList.setOnItemClickListener((adapterView, view, i, l) -> {
-            breaker = true;
-            if (connectThread != null) {
-                connectThread.interrupt();
-                connectThread = null;
+            Log.d("connectToBle", "click on device");
+            if(!hideMode){
+                breaker = true;
+                if (connectThread != null) {
+                    connectThread.interrupt();
+                    connectThread = null;
+                }
+                close();
+                Connect_to_BLE(i);
             }
-            close();
-            Connect_to_BLE(i);
+
         });
 
         //Для вывода на экран статуса подключения
@@ -264,7 +308,8 @@ public class Connect extends AppCompatActivity {
                 if (!be_connect && !isConnecting) {
                     pgBar.setVisibility(View.INVISIBLE);
                     stateText.setVisibility(View.INVISIBLE);
-                    peripheralTextView.setText(getString(R.string.err_conncet));
+                    peripheralTextView.setText(getString(R.string.err_connect));
+                    startScanningButton.setVisibility(View.VISIBLE);
                 }
                 if (!offline)
                 {
@@ -292,27 +337,29 @@ public class Connect extends AppCompatActivity {
                 startActivityForResult(enableIntent,REQUEST_ENABLE_BT);
             }
 
-            while (!btAdapter.isEnabled()) {                                       //пока не включен блютуз выводим сообщение
-                if (bluetooth_en == 1)
+            if (!btAdapter.isEnabled()) {                                       //если не включен блютуз выводим сообщение
+                if (!bluetooth_en)
                 {
                     enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                     startActivityForResult(enableIntent,REQUEST_ENABLE_BT);
-                    bluetooth_en = 0;
 
                 }
-                if (bluetooth_en == 2) break;
-                else
-                    try {
-                        Thread.sleep(5000);
-                    }catch (Exception e){
-                        Log.e("BLE", "Sleep interrupted", e);
-                    }
             }
             btScanner = btAdapter.getBluetoothLeScanner();
         }
         catch (Exception ex) {peripheralTextView.setText(R.string.err_adapter);}
+
+
     }
     //-----Конец OnCreate
+
+    @Override
+    protected void onDestroy()
+    {
+        super.onDestroy();
+        BLElist.clear();
+        BLElist = null;
+    }
 
     //Функция выводи сообщение о необходимости отключения энергосбережения
     private void Set_Battery()
@@ -342,16 +389,18 @@ public class Connect extends AppCompatActivity {
         @Override
         public void onScanResult(int callbackType, ScanResult result)
         {
-            if (result.getDevice().getName()!=null)                                                //имя может быть null - поэтому contains вызывает исключение
+            if (result.getDevice().getName()!=null){
                 if (result.getDevice().getName().contains("PG")) {
-                currentDevice = getResources().getString(R.string.Device) + result.getDevice().getName();                         //текущее устройство
-                if (!DeviceList.contains(currentDevice)) {                                         //если тек. устройства нет в списке
-                    DeviceList.add(currentDevice);                                                 //добавляем его
-                    BLElist.add(result.getDevice());                                               //пишем в список наших устройств
-                }
-                //Обновляем listview
-                ArrayAdapter<String> AdapterTMP = new ArrayAdapter<>(Connect.this, android.R.layout.simple_list_item_1, DeviceList);
-                deviceList.setAdapter(AdapterTMP);
+                    currentDevice = getResources().getString(R.string.Device) + result.getDevice().getName();                         //текущее устройство
+                    if (!DeviceList.contains(currentDevice)) {                                         //если тек. устройства нет в списке
+                        DeviceList.add(currentDevice);                                                 //добавляем его
+                        BLElist.add(result.getDevice());                                               //пишем в список наших устройств
+                    }
+                    //Обновляем listview
+                    ArrayAdapter<String> AdapterTMP = new ArrayAdapter<>(Connect.this, android.R.layout.simple_list_item_1, DeviceList);
+                    deviceList.setAdapter(AdapterTMP);
+            }                                                //имя может быть null - поэтому contains вызывает исключение
+
             }
         }
     };
@@ -364,7 +413,9 @@ public class Connect extends AppCompatActivity {
             close();         //отключаемся
         be_connect = false;
         deviceList.setAdapter(null);                                                                //убираем адаптер из listview, очищая его
-        BLElist.clear();                                                                            //чистим устройства
+        if(BLElist != null){
+            BLElist.clear();                                                                            //чистим устройства
+        }
         DeviceList.clear();                                                                         //чистим имена устройств
         currentDevice = "";
         peripheralTextView.setText(R.string.start_scan);
@@ -401,9 +452,15 @@ public class Connect extends AppCompatActivity {
                         return;
                     }
                 }
+                if(btScanner != null){
+                    btScanner.startScan(leScanCallback);            //запускаем сканирование
+                    Log.d("Scan", "Начал сканирование");
+                }else{
+                    btScanner = btAdapter.getBluetoothLeScanner();
+                    startScanning();
+                }
 
-                btScanner.startScan(leScanCallback);                                               //запускаем сканирование
-                Log.d("Scan", "Начал сканирование");
+
             }
             catch (Exception ex)
             {peripheralTextView.setText(R.string.scan_error);}
@@ -461,9 +518,15 @@ public class Connect extends AppCompatActivity {
     private int index;
     Thread connectThread;
 
+
     //Подключение к выбранному BLE устройству
     public void Connect_to_BLE(int ind)
     {
+        if(!btAdapter.isEnabled()){
+            Toast.makeText(this, "Для работы приложения необходимо включить Bluetooth", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         if (be_connect) {
             close();
             be_connect = false;
@@ -472,6 +535,8 @@ public class Connect extends AppCompatActivity {
         isConnecting = true;
 
         index = ind;
+//        BluetoothDevice Current_Device;
+//        Current_Device = BLElist.get(index);
         /*Запускаем  поток*/
         connectThread = new Thread(runnable_connect);
         connectThread.start();
@@ -504,62 +569,50 @@ public class Connect extends AppCompatActivity {
     public static BluetoothGatt mBluetoothGatt;
     public BluetoothGattCharacteristic mCharacteristic;
 
+    private boolean refreshGattCache(BluetoothGatt gatt) {
+        try {
+            Method refresh = gatt.getClass().getMethod("refresh");
+            if (refresh != null) {
+                return (boolean) refresh.invoke(gatt);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Ошибка refresh", e);
+        }
+        return false;
+    }
+
 
     //Обратный вызов GATT сервиса устройства
     public BluetoothGattCallback bluetoothGattCallback = new BluetoothGattCallback() {
 
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         @Override
         //При подключении
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             super.onConnectionStateChange(gatt, status, newState);
-            Log.d(TAG, "onConnectionStateChange " + newState);
+            Log.d(TAG, "onConnectionStateChange " + " newstate " + newState + " status " + status);
 
-            String intentAction;
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                intentAction = ACTION_GATT_CONNECTED;
+                read_pause = false;
                 mConnectionState = STATE_CONNECTED;
-                broadcastUpdate(intentAction);
                 Log.i(TAG, "Connected to GATT server.");
                 Log.i(TAG, "Attempting to start service discovery:");
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 
-                    // Android 12+
-                    if (ActivityCompat.checkSelfPermission(Connect.this, Manifest.permission.BLUETOOTH_CONNECT)
-                            != PackageManager.PERMISSION_GRANTED) {
-
-                        ActivityCompat.requestPermissions(
-                                Connect.this,
-                                new String[]{Manifest.permission.BLUETOOTH_CONNECT},
-                                2001
-                        );
-                        return;
-                    }
-
-                } else {
-                    // Android 8–11 (обычно уже достаточно Bluetooth permission, но можно добавить check)
-                    if (ActivityCompat.checkSelfPermission(Connect.this, Manifest.permission.BLUETOOTH)
-                            != PackageManager.PERMISSION_GRANTED) {
-
-                        ActivityCompat.requestPermissions(
-                                Connect.this,
-                                new String[]{Manifest.permission.BLUETOOTH},
-                                2001
-                        );
-                        return;
-                    }
-                }
-//                gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_BALANCED);
+//                checkBTPermissions();
+                refreshGattCache(mBluetoothGatt);
                 mBluetoothGatt.discoverServices();
 
             } else if (newState == STATE_DISCONNECTED) {
-                intentAction = ACTION_GATT_DISCONNECTED;
                 mConnectionState = STATE_DISCONNECTED;
-                if(disconnectFromUser){
+                Log.i(TAG, "Disconnected from GATT server.");
+                if (!disconnectFromUser && !isReconnecting) {
                     showMessageForDisconnect();
                 }
-                Log.i(TAG, "Disconnected from GATT server.");
-                broadcastUpdate(intentAction);
                 close();
+                read_pause = true;
+            }
+            if (status == 8 && isReconnecting) {
+                infoHandler.sendEmptyMessage(1);
             }
 
         }
@@ -570,9 +623,7 @@ public class Connect extends AppCompatActivity {
             super.onServicesDiscovered(gatt, status);
             Log.d(TAG, "onServicesDiscovered " + status);
             servicesDiscovered = true;
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED);
-            } else {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
                 Log.w(TAG, "onServicesDiscovered received: " + status);
             }
 
@@ -652,15 +703,9 @@ public class Connect extends AppCompatActivity {
         return mBluetoothGatt.getServices();
     }
 
-    private void broadcastUpdate(final String action) {
-        final Intent intent = new Intent(action);
-        sendBroadcast(intent);
-    }
-
     //При заврешении чтения значения
 
     private void broadcastUpdate(final String action, final BluetoothGattCharacteristic characteristic) throws UnsupportedEncodingException {
-        final Intent intent = new Intent(action);
         byte[] rec_value = characteristic.getValue();
         if (UUID_DGS_STRING.equals(characteristic.getUuid())) {
 
@@ -670,7 +715,9 @@ public class Connect extends AppCompatActivity {
                 /*Чтение динамических параметров*/
                 case DYNPARAM:
                          myPG.parseDyn(rec_value);               //парсинг динамических параметров
-                         State_of_connection = getResources().getString(R.string.dyn_read_complete);
+                    if(!InfoPage.dynReading){
+                        State_of_connection = getResources().getString(R.string.dyn_read_complete);
+                    }
                     break;
                 /*  Чтение структуры параметров */
                 case READPARAM:
@@ -700,7 +747,6 @@ public class Connect extends AppCompatActivity {
             State_pack = RX_pack.COMPLETE;
 
         }
-        sendBroadcast(intent);
     }
 
     //Закрыть соединение по GATT
@@ -709,10 +755,16 @@ public class Connect extends AppCompatActivity {
         if (mBluetoothGatt == null) {
             return;
         }
+
         try {
             mBluetoothGatt.disconnect();
             mBluetoothGatt.close();
             mBluetoothGatt = null;
+            if(myPG.mBluetoothGatt != null){
+                myPG.mBluetoothGatt.disconnect();
+                myPG.mBluetoothGatt.close();
+                myPG.mBluetoothGatt = null;
+            }
         } catch (Exception e) {
             Log.d("BLE", "Error closing GATT: " + e);
         }
@@ -751,7 +803,7 @@ public class Connect extends AppCompatActivity {
 
         }
         Intent intent = new Intent(this, InfoPage.class);
-        startActivity(intent);
+        startActivityForResult(intent, CHOOSE_THIEF);
     }
 
     //** Преречисление возможных пакетов для чтения **///
@@ -764,27 +816,27 @@ public class Connect extends AppCompatActivity {
     }
 
 
-    Runnable runnable_connect = new Runnable() {
+    public Runnable runnable_connect = new Runnable() {
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         public void run() {
                     try {
+
+                    Activity target = getTargetActivity();
+
+                    if (target == null || target.isFinishing() || target.isDestroyed()) {
+                        Log.e("Connect", "Нет активной Activity");
+                        return;
+                    }
 
                     offline = true;
                     BluetoothDevice Current_Device;              //текущий девайс для подключения
                     breaker = false;                             //не обрываем поток
                     Current_Device = BLElist.get(index);
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ActivityCompat.checkSelfPermission(Connect.this, Manifest.permission.BLUETOOTH_CONNECT)
-                                != PackageManager.PERMISSION_GRANTED) {
 
-                            ActivityCompat.requestPermissions(
-                                    Connect.this,
-                                    new String[]{Manifest.permission.BLUETOOTH_CONNECT},
-                                    1006
-                            );
-                            return;
-                        }
 
+//                    checkBTPermissions();
                     mBluetoothGatt = Current_Device.connectGatt(
-                            Connect.this,
+                            target,
                             false,
                             bluetoothGattCallback
                     );
@@ -794,63 +846,91 @@ public class Connect extends AppCompatActivity {
                     Thread.sleep(500);
 
                     List<BluetoothGattService> BLEList = new ArrayList<>();
-                    State_of_connection = getResources().getString(R.string.services_search);
-                    handler.sendEmptyMessage(1);
+                    if(!isReconnecting){
+                        State_of_connection = getResources().getString(R.string.services_search);
+                        handler.sendEmptyMessage(1);
+                    }
                     //Переподключаемся пока не произойдет подключения( 5 попыток)
                     short z = 0;
                     do {
                         BLEList = getSupportedGattServices();
                         z++;
 
-                        if (BLEList.isEmpty()) {
+                        if (BLEList == null || BLEList.isEmpty()) {
 
                             if (mBluetoothGatt == null) {
-                                mBluetoothGatt = Current_Device.connectGatt(Connect.this, false, bluetoothGattCallback);
+                                mBluetoothGatt = Current_Device.connectGatt(target, false, bluetoothGattCallback);
                             }
                             if (breaker) return;
                             Thread.sleep(2000);
                         }
-                        Log.d(TAG, "BLEList ITEMS:" + BLEList.size() + " гад: " + mBluetoothGatt);
-
+                        int size = (BLEList == null) ? 0 : BLEList.size();
+                        Log.d(TAG, "BLEList ITEMS: " + size + " гад: " + mBluetoothGatt);
                     }
-                    while ((BLEList.isEmpty()) && (z < 5));
+                    while ((z < 5) && ((BLEList == null || BLEList.isEmpty())));
 
 
-                    if (BLEList.isEmpty()) {
+                    if (BLEList == null || BLEList.isEmpty()) {
                         be_connect = false;
                         isConnecting = false;
-                        handler.sendEmptyMessage(1);
+
+                        Handler targetHandler = isReconnecting ? infoHandler : handler;
+                        targetHandler.sendEmptyMessage(1);
                         Log.d("runnable connect", "ошибка: сервисы не нашлись");
                         return;
                     } else {
-                        State_of_connection = getResources().getString(R.string.params_reading);
-                        handler.sendEmptyMessage(1);
+                        if(!isReconnecting){
+                            State_of_connection = getResources().getString(R.string.params_reading);
+                            handler.sendEmptyMessage(1);
+                        }
                     }
 
                     try {
                         if (BLEList.size() > 3) {
-                            Log.d(TAG, "BLEList 3 pos caption:" + BLEList.get(3).getUuid());
                             mCharacteristic = BLEList.get(3).getCharacteristic(UUID_DGS_STRING);
+                            Log.d(TAG, "BLEList 3 pos caption:" + BLEList.get(3).getUuid() + " " + mCharacteristic);
+
                         }
                         //Где 3 номер характеристики к которой хотим подключиться
                         if (mCharacteristic != null) {
                             be_connect = true;
                             isConnecting = false;
+//                            if (getResources() == null) {
+//                                Log.e(TAG, "Resources = null, Activity уничтожена");
+//                                return;
+//                            }
+                            Log.d("runnable_connect", "context: " + target);
+
                             //Создаем объект класса ПГ
-                            myPG = PG414.getInstance(mBluetoothGatt, mCharacteristic, Connect.this);
-                            myPG.set_locale(getResources().getConfiguration().locale.toString());
-                            //запускаем фоновый поток
+                            myPG = PG414.getInstance(mBluetoothGatt, mCharacteristic, target);
+                            Log.d("runnable_connect", "объект пг " + myPG);
+                            String locale;
+                            locale = target.getResources().getConfiguration().locale.toString();
+                            myPG.set_locale(locale);
+
+                            if(isReconnecting){
+                                offline = false;
+                                infoHandler.sendEmptyMessage(2);
+                                return;
+                            }
                         } else {
                             Log.d("runnable connect", "Не нашел характеристику");
-                            State_of_connection = getResources().getString(R.string.err_conncet);
+
                             be_connect = false;
                             isConnecting = false;
+
+                            if(isReconnecting){
+                                infoHandler.sendEmptyMessage(1);
+                            }else{
+                                State_of_connection = getResources().getString(R.string.err_connect);
+                                handler.sendEmptyMessage(1);
+                            }
                         }
-                        handler.sendEmptyMessage(1);
                     } catch (Exception e) {
                         return;
                     }
                     if (be_connect) {
+                        Log.d("runnable_connect", "Запускаю первичное чтение");
                         trueRead = false;
                         //Читаем динамические параметры устройства
                         // задержка между отправкой команды и чтением ответа
@@ -914,7 +994,8 @@ public class Connect extends AppCompatActivity {
                 }
             }
         };
-    //--
+
+
 //Функция запроса разрешений на локацию
     public static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
 
@@ -1022,6 +1103,53 @@ public class Connect extends AppCompatActivity {
         }
     }
 
+//    public boolean permissionGranted = false;
+
+    public void checkBTPermissions() {
+        Activity target = getTargetActivity();
+
+        if (target == null || target.isFinishing() || target.isDestroyed()) {
+            Log.e("Connect", "Нет активной Activity");
+            return;
+        }
+
+        final Activity activity = target;
+
+        // Выполняем в UI потоке
+        activity.runOnUiThread(() -> {
+            if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+                Log.e("Connect", "Activity уничтожена во время выполнения");
+                return;
+            }
+
+            boolean granted;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                granted = ActivityCompat.checkSelfPermission(activity, Manifest.permission.BLUETOOTH_CONNECT)
+                        == PackageManager.PERMISSION_GRANTED;
+                if (!granted) {
+                    ActivityCompat.requestPermissions(
+                            activity,
+                            new String[]{Manifest.permission.BLUETOOTH_CONNECT},
+                            2001
+                    );
+                }
+            } else {
+                granted = ActivityCompat.checkSelfPermission(activity, Manifest.permission.BLUETOOTH)
+                        == PackageManager.PERMISSION_GRANTED;
+                if (!granted) {
+                    ActivityCompat.requestPermissions(
+                            activity,
+                            new String[]{Manifest.permission.BLUETOOTH},
+                            2001
+                    );
+                }
+            }
+
+
+        });
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode,
                                            @NonNull String[] permissions,
@@ -1052,6 +1180,13 @@ public class Connect extends AppCompatActivity {
     //-----------------------------------------------------------------
     void showMessageForDisconnect()
     {
+        Log.d("showMessage", "Показываю уведомление об отлючении");
+        Activity target = getTargetActivity();
+
+        if (target == null || target.isFinishing() || target.isDestroyed()) {
+            Log.e("Connect", "Нет активной Activity");
+            return;
+        }
         Notification notification;
         Uri alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
         long[] pattern = {0, 100, 1000, 200, 2000};

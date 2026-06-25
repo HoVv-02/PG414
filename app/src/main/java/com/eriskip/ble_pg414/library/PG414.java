@@ -67,6 +67,8 @@ public class PG414 {
         public long zavod_number;       //заводской номер
         public byte percent_charge;     //процент зарядки батареи
 
+        public byte temp;
+
         public String[]     gazUnit = new String[4];    //единицы измерения
         public String[]     gazType = new String[4];    //тип газа
         public byte[]       gazDiskret = new byte[4];   //дискертность единиц измерения газа
@@ -104,6 +106,7 @@ public class PG414 {
         }
         // Публичный метод получения экземпляра
         public static PG414 getInstance(BluetoothGatt mBGT, BluetoothGattCharacteristic Character, Context context) {
+            Log.d("getInstance", "" + mBGT + Character);
             if (instance == null) {
                 synchronized (PG414.class) {
                     if (instance == null) {
@@ -132,6 +135,7 @@ public class PG414 {
 
         // Метод для обновления GATT и характеристики (при переподключении)
         public void updateGatt(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+            Log.d("updateGatt", "" + gatt + characteristic);
             if (gatt != null) {
                 this.mBluetoothGatt = gatt;
             }
@@ -144,6 +148,7 @@ public class PG414 {
         //Проверка, является ли русской текущая локаль
         public void set_locale(String text_locale)
         {
+            Log.d("set_locale", "" + text_locale);
             char[] ch_locale = text_locale.toCharArray();
             localeRus = ch_locale[0] == 'r' && ch_locale[1] == 'u';
         }
@@ -162,9 +167,9 @@ public class PG414 {
                         "Порог 1 - Канал 4",                                                       //9
                         "Порог 2 - Канал 4",                                                       //10
                         "Превышение диапазона - Канал 4",                                          //11
-                        "Порог 1 - Сенсор 5",                                                       //12
-                        "Порог 2 - Сенсор 5",                                                       //13
-                        "Превышение диапазона - Сенсор 5",                                          //14
+                        "",                                                       //12
+                        "",                                                       //13
+                        "падение человека",                                          //14
                         "Человек без движения",                                                     //15
                         "Низкий заряд батареи",                                                     //16
                         "Время не установлено",                                                     //17
@@ -177,9 +182,9 @@ public class PG414 {
                         "Давление вышло за диапазон. Используется нормальное давление - 101,3 кПа", //24
                         "Чистая флешка архива или CRC flash",                                       //25
                         "Ошибка радиомодуля",                                                       //26
-                        "Падение человека",                                                         //27
+                        "",                                                         //27
                         "Ошибка платы питания, пин PWGD",                                           //28
-                        "Ошибка акселер",                                                           //29
+                        "Ошибка акселерометра",                                                           //29
                         "Неисправность сенсора",                                                    //30
                         "Ошибка расширителя"                                                        //31
 
@@ -223,7 +228,6 @@ public class PG414 {
 
         /**********ФУНКЦИИ**********/
 
-        //Запрос на чтение динмических параметров
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         public void setParamOnOff(short s1, short s2, char set)
         {
@@ -314,6 +318,8 @@ public class PG414 {
             {
                 state[x] = answer[12 + x];
             }
+
+            temp = answer[19];
             percent_charge = answer[21];
 
 
