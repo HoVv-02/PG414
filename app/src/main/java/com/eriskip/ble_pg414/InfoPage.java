@@ -31,6 +31,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -80,8 +81,12 @@ public class InfoPage extends AppCompatActivity {
     public TextView tconc1, tconc2, tconc3, tconc4, tzavod, gaz1, gaz2, gaz3, gaz4, tgps, tstatus, //текстовые поля
              charge, temp, errcon, arch_cnt;
     ImageView disconnect, arch_alert;
+    LinearLayout gazLayout1;
+    LinearLayout gazLayout2;
+    LinearLayout gazLayout3;
+    LinearLayout gazLayout4;
 
-    Button btnReconnect;
+//    Button btnReconnect;
     //----------------------------------------------------------------------------------------------
 
     CheckBox cbMoblity;             //детекция неподвижности
@@ -173,6 +178,7 @@ public class InfoPage extends AppCompatActivity {
         return bestLocation;
     }
 
+
     @SuppressLint({"UnspecifiedRegisterReceiverFlag", "SetTextI18n"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -214,7 +220,12 @@ public class InfoPage extends AppCompatActivity {
         arch_alert = findViewById(R.id.arch_alert);         //иконка алерт у архива
         disconnect = findViewById(R.id.disconnect);         //картинка дисконнекта
 
-        btnReconnect = findViewById(R.id.reconnect);            //кнопка переподключения
+        gazLayout1 = findViewById(R.id.gazLayout1);
+        gazLayout2 = findViewById(R.id.gazLayout2);
+        gazLayout3 = findViewById(R.id.gazLayout3);
+        gazLayout4 = findViewById(R.id.gazLayout4);
+
+//        btnReconnect = findViewById(R.id.reconnect);            //кнопка переподключения
 
         cbMoblity = findViewById(R.id.cbMoblity);
         if ((myPG.onoff2 & (1 << 10)) == 0) cbMoblity.setChecked(true);
@@ -251,10 +262,11 @@ public class InfoPage extends AppCompatActivity {
         }
 
         //Выводим описатели газа
-        gaz1.setText(myPG.gazType[0] + ", " + myPG.gazUnit[0]);
-        gaz2.setText(myPG.gazType[1] + ", " + myPG.gazUnit[1]);
-        gaz3.setText(myPG.gazType[2] + ", " + myPG.gazUnit[2]);
-        gaz4.setText(myPG.gazType[3] + ", " + myPG.gazUnit[3]);
+        gaz1.setText(isNoneInGaz(0) ? "Отключено" : myPG.gazType[0] + ", " + myPG.gazUnit[0]);
+        gaz2.setText(isNoneInGaz(1) ? "Отключено" : myPG.gazType[1] + ", " + myPG.gazUnit[1]);
+        gaz3.setText(isNoneInGaz(2) ? "Отключено" : myPG.gazType[2] + ", " + myPG.gazUnit[2]);
+        gaz4.setText(isNoneInGaz(3) ? "Отключено" : myPG.gazType[3] + ", " + myPG.gazUnit[3]);
+
 
         //Статус
         tstatus = findViewById(R.id.tstate);
@@ -289,17 +301,21 @@ public class InfoPage extends AppCompatActivity {
         //----------------------------------
         //потоки
 
-        fonValRefreshStart();
+
         if (!Connect.offline) {
-
+            fonValRefreshStart();
+            Log.d("OnCreate", "запускаю чтение динамики");
             startDynRead();   //запускаем чтение динамики
+            if(cbServer.isChecked()){
+                startServerTimer();
+            }
+            saveArchiveIfNeeded();
         }
 
-        if(cbServer.isChecked()){
-            startServerTimer();
-        }
-        saveArchiveIfNeeded();
-        cbMoblity.setOnClickListener(view -> setCheck());
+
+        cbMoblity.setOnClickListener(view -> {
+            if(!Connect.offline) setCheck();
+        });
         cbServer.setOnCheckedChangeListener((buttonView, isChecked1) -> {
             // Сохраняем состояние при изменении
             prefs.edit().putBoolean("moblity_enabled", isChecked1).apply();
@@ -313,22 +329,20 @@ public class InfoPage extends AppCompatActivity {
                 switch (msg.what) {
                     case 1:
                         tstatus.setText(R.string.err_connect);
-                        btnReconnect.setVisibility(VISIBLE);
-                        Connect.isReconnecting = false;
-                        connect.close();
+//                        btnReconnect.setVisibility(VISIBLE);
+                        reconnect();
                         Log.d("infoHandler", "Ошибка подключения");
                         break;
                     case 2:
                         Log.d("infoHandler", "Подключение успешно, запускаю потоки");
                         tstatus.setText(R.string.con_restored);
-                        btnReconnect.setVisibility(INVISIBLE);
-                        Connect.isReconnecting = false;
-                        Connect.read_pause = false;
+//                        btnReconnect.setVisibility(INVISIBLE);
                         connect_device = true;
                         //Запускаем все потоки
+                        isUpdating = true;
                         fonValRefreshStart();
                         if (!Connect.offline) {
-
+                            Log.d("infoHandler", "запускаю чтение динамики");
                             startDynRead();
                         }
 
@@ -342,6 +356,9 @@ public class InfoPage extends AppCompatActivity {
 
     }
 
+    private boolean isNoneInGaz(int x) {
+        return (myPG.gazType[x] + ", " + myPG.gazUnit[x]).contains("none");
+    }
 
     //Обновление параметров GPS
     @SuppressLint("SetTextI18n")
@@ -398,49 +415,60 @@ public class InfoPage extends AppCompatActivity {
     private final Handler dynReadHandler = new Handler(Looper.getMainLooper());
 
     private void startDynRead(){
-        dynReading = true;
 
         dynReadHandler.postDelayed(new Runnable() {
             @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
             @Override
             public void run() {
-                if (!dynReading) return;
+                dynReading = true;
                 if (!Connect.read_pause) {
                     new Thread(() -> {
-                        if (!dynReading || Connect.read_pause) return;
-                        if (Connect.State_pack == Connect.RX_pack.COMPLETE) {
-                            connToDev = 0;
-                            connect_device = true;
-                        }
-
-                        Log.d("ПГ-414", "Делаю запрос");
-                        if (!dynReading || Connect.read_pause) return;
-                        Connect.State_pack = Connect.RX_pack.DYNPARAM;
-                        myPG.reqDyn();
 
                         try {
-                            Thread.sleep(2300);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            return;
+                            if (!dynReading || Connect.read_pause) return;
+                            if (Connect.State_pack == Connect.RX_pack.COMPLETE) {
+                                connToDev = 0;
+                                connect_device = true;
+                            }
+
+                            Log.d("ПГ-414", "Делаю запрос");
+                            if (!dynReading || Connect.read_pause) return;
+                            Connect.State_pack = Connect.RX_pack.DYNPARAM;
+                            myPG.reqDyn();
+
+                            try {
+                                Thread.sleep(2300);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                return;
+                            }
+                            Log.d("dynRead", "dynReading " + dynReading + " read_pause " + Connect.read_pause);
+
+                            if (!dynReading || Connect.read_pause) {
+                                Log.d("dynRead", "Флаг сбросился: " + "dynReading " + dynReading + " read_pause " + Connect.read_pause);
+                                return;
+                            }
+                            myPG.startRead();
+
+                            // Ожидание с таймаутом
+                            waitForCompletion(5000);
+
+                            Log.d("InfoPage", abort_counter + " " + Connect.State_pack);
+
+                            if (abort_counter >= 5 && Connect.State_pack != Connect.RX_pack.COMPLETE) {
+                                Log.d("ПГ-414", "Не могу достучаться " + connToDev);
+                            } else {
+                                Log.d("ПГ-414", "Прочитал");
+                                connToDev = 0;
+                            }
+
+                            abort_counter = 0;
+                        } finally {
+                            // Планируем следующий запуск
+                            if (dynReading) {
+                                dynReadHandler.postDelayed(this, 500);
+                            }
                         }
-
-                        if (!dynReading || Connect.read_pause) return;
-                        myPG.startRead();
-
-                        // Ожидание с таймаутом
-                        waitForCompletion(5000);
-
-                        Log.d("InfoPage", abort_counter + " " + Connect.State_pack);
-
-                        if (abort_counter >= 5 && Connect.State_pack != Connect.RX_pack.COMPLETE) {
-                            Log.d("ПГ-414", "Не могу достучаться " + connToDev);
-                        } else {
-                            Log.d("ПГ-414", "Прочитал");
-                            connToDev = 0;
-                        }
-
-                        abort_counter = 0;
 
                     }).start();
 
@@ -448,16 +476,14 @@ public class InfoPage extends AppCompatActivity {
 
                 }
 
-                // Планируем следующий запуск
-                if (dynReading) {
-                    dynReadHandler.postDelayed(this, 500);
-                }
+
 
             }
         }, 0);
     }
 
     private void waitForCompletion(int timeout) {
+        Log.d("dynRead","Ожидание с таймаутом");
         long start = System.currentTimeMillis();
         while (Connect.State_pack != Connect.RX_pack.COMPLETE && System.currentTimeMillis() - start < timeout) {
             if (Connect.read_pause) return;
@@ -478,12 +504,15 @@ public class InfoPage extends AppCompatActivity {
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
+                if (!isUpdating) return;
 
                 UIUpdate();
                 Construct_JobInfo();
                 abort_counter++;
 
-                handler.postDelayed(this, 1500); // повторяем каждые 1.5 сек
+                if (isUpdating) {
+                    handler.postDelayed(this, 1500); // повторяем каждые 1.5 сек
+                }
             }
         }, 2000); // первый запуск через 2 сек
     }
@@ -970,6 +999,9 @@ public class InfoPage extends AppCompatActivity {
 
     }
 
+    String tState;
+
+    private volatile boolean isUpdating = true;
     @SuppressLint("SetTextI18n")
     public void UIUpdate()
     {
@@ -1031,39 +1063,66 @@ public class InfoPage extends AppCompatActivity {
 
             }
             //Статус
-            String tState = myPG.Make_State();
+            tState = myPG.Make_State();
 
             connToDev++;                                            //увеличиываем счетчик попыток подключения. он сбрасывается при успешном чтении
             if (connToDev > 222) connToDev = 11;
             Log.d("UIUpdate", "Попыток подключения: " + String.valueOf(connToDev) + "Гад: " + myPG.mBluetoothGatt);
 
+
+
             //если попыток было 5 а информации от ПГ-414 не поступала выводим сообщение
             if (connToDev > 10 && !sending_archive || Connect.mConnectionState == STATE_DISCONNECTED) {
                 connect_device = false;
-                tState = getString(R.string.con_lost);
+                tState = getString(R.string.connect);
                 myPG.status = tState;
-                Log.d("UIUpdate", "нет соединения с устройством, обновляю статус");
+                Log.d("UIUpdate", "нет соединения с устройством, обновляю статус и запускаю переподключение");
+                isUpdating = false;
+                reconnect();
             }
-            btnReconnect.setVisibility(!connect_device && !Connect.isReconnecting ? VISIBLE : INVISIBLE);
+//            btnReconnect.setVisibility(!connect_device && !Connect.isReconnecting ? VISIBLE : INVISIBLE);
             tstatus.setText(tState);
+
+            colorSensorIfAlarm();               //подсвечиваем сенсор, если сработал порог или превышение
+    }
+
+    private void colorSensorIfAlarm(){
+        LinearLayout[] gazLayouts = {
+                gazLayout1,
+                gazLayout2,
+                gazLayout3,
+                gazLayout4
+        };
+
+        for (int sensor = 0; sensor < 4; sensor++){
+            if(tState.contains(myPG.gazType[sensor])){
+                gazLayouts[sensor].setBackgroundColor(0x80FF0000);
+            }else {
+                gazLayouts[sensor].setBackgroundColor(Color.TRANSPARENT);
+            }
+        }
     }
 
     Connect connect = new Connect();
     Thread reconnectThread;
-   public void reconnect(View v){
-       Log.d("reconnect", "Пользователь нажал переподлючиться");
-        Connect.isReconnecting = true;
-        tstatus.setText(R.string.connect);
-        handler.removeCallbacksAndMessages(null);
-        if(serverHandler != null){
-            serverHandler.removeCallbacksAndMessages(null);
-        }
-        dynReadHandler.removeCallbacksAndMessages(null);
-        dynReading = false;
-        archiveHandler.removeCallbacksAndMessages(null);
-        connect.close();
-        reconnectThread =  new Thread(connect.runnable_connect);
-        reconnectThread.start();
+   public void reconnect(){
+       Log.d("reconnect", "Переподключаюсь");
+       handler.removeCallbacksAndMessages(null);
+       if(serverHandler != null){
+           serverHandler.removeCallbacksAndMessages(null);
+       }
+       dynReadHandler.removeCallbacksAndMessages(null);
+       dynReading = false;
+       archiveHandler.removeCallbacksAndMessages(null);
+       Connect.isReconnecting = true;
+       connect.close();
+
+       new Handler(Looper.getMainLooper()).postDelayed(() ->{
+           reconnectThread = new Thread(connect.runnable_connect);
+           reconnectThread.start();
+       }, 1500);
+
+
    }
 
     private final Handler archiveHandler = new Handler(Looper.getMainLooper());
@@ -1262,6 +1321,7 @@ public class InfoPage extends AppCompatActivity {
         if(!Connect.offline && !Connect.hideMode){
             Connect.read_pause = true;
             Connect.State_pack = Connect.RX_pack.PARAMS;
+            Connect.isSetCheck = true;
             if (!cbMoblity.isChecked())
             {
                 myPG.setParamOnOff((short) 0, (short)(1 << 10),'+');
@@ -1271,7 +1331,6 @@ public class InfoPage extends AppCompatActivity {
                 myPG.setParamOnOff((short)0, (short)(1 << 10),'-');
             }
         }
-
 
     }
 

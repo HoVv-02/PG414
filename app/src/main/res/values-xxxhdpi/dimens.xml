@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <dimen name="main_pic_height">250dp</dimen>
+    <dimen name="main_pic_width">300dp</dimen>
+    <dimen name="main_pic_height">616dp</dimen>
     <dimen name="main_top_margin">240dp</dimen>
+    <dimen name="gas_layer_width">135dp</dimen>
+    <dimen name="gas_layer_height">270dp</dimen>
+    <dimen name="gas_layer_margin_top">271dp</dimen>
 </resources>
