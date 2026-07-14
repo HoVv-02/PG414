@@ -479,6 +479,7 @@ public class PG414 {
 
             int err = getCashedErrorBits();
 
+            displayAlarmsAndOverRange();
 
             for (int i = 0; i < 32; i++)
             {
@@ -488,6 +489,7 @@ public class PG414 {
                         if (i < array_of_Errors_RUS.length)
                         {
                             errors.add(array_of_Errors_RUS[i]);
+
                         }
                     }else{
                         if(i < array_of_Errors_EN.length)
@@ -498,8 +500,10 @@ public class PG414 {
 
                 }
             }
+            Log.d("Make_State", " " +  errors);
 
             Set<String> prioritizedErrors = applyThresholdPriority(errors);
+            Log.d("Make_State", " " + prioritizedErrors);
 
             if (prioritizedErrors.isEmpty())
             {
@@ -512,6 +516,20 @@ public class PG414 {
             return result;
         }
 
+        private void displayAlarmsAndOverRange(){
+            for (int sensor = 0; sensor < 4; sensor++){
+                if(localeRus){
+                    array_of_Errors_RUS[sensor * 3] = "Порог 1 - " + gazType[sensor];
+                    array_of_Errors_RUS[sensor * 3 + 1] = "Порог 2 - " + gazType[sensor];
+                    array_of_Errors_RUS[sensor * 3 + 2] = "Превышение диапазона - " + gazType[sensor];
+                }else {
+                    array_of_Errors_EN[sensor * 3] = "Alarm 1 - " + gazType[sensor];
+                    array_of_Errors_EN[sensor * 3 + 1] = "Alarm 2 - " + gazType[sensor];
+                    array_of_Errors_EN[sensor * 3 + 2] = "Over range - " + gazType[sensor];
+                }
+            }
+        }
+
     private Set<String> applyThresholdPriority(Set<String> errors)
     {
         Set<String> result = new LinkedHashSet<>();
@@ -519,17 +537,6 @@ public class PG414 {
         // Обрабатываем каждый сенсор
         for (int sensor = 0; sensor < 4; sensor++)
         {
-
-            if(localeRus){
-                array_of_Errors_RUS[sensor * 3] = "Порог 1 - " + gazType[sensor];
-                array_of_Errors_RUS[sensor * 3 + 1] = "Порог 2 - " + gazType[sensor];
-                array_of_Errors_RUS[sensor * 3 + 2] = "Превышение диапазона - " + gazType[sensor];
-            }else {
-                array_of_Errors_EN[sensor * 3] = "Alarm 1 - " + gazType[sensor];
-                array_of_Errors_EN[sensor * 3 + 1] = "Alarm 2 - " + gazType[sensor];
-                array_of_Errors_EN[sensor * 3 + 2] = "Over range - " + gazType[sensor];
-            }
-
             String firstThreshold = localeRus ?
                     array_of_Errors_RUS[sensor * 3] :
                     array_of_Errors_EN[sensor * 3];
@@ -563,7 +570,8 @@ public class PG414 {
         // Добавляем системные ошибки (не связанные с порогами)
         for (String error : errors)
         {
-            if (!error.contains("Порог") && !error.contains("Превышение диапазона"))
+            if (localeRus ? !error.contains("Порог") && !error.contains("Превышение диапазона") :
+                    !error.contains("Alarm") && !error.contains("Over range"))
             {
                 result.add(error);
             }
