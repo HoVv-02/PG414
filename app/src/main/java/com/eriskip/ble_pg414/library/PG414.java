@@ -104,6 +104,17 @@ public class PG414 {
             }
             if (HIDEMODE) zavod_number = zavod_mulage;
         }
+
+        //конструктор для офлайн режима
+        private PG414(Context context)
+        {
+            this.context = context.getApplicationContext();
+            zavod_number = 0;
+            gazDelitel = new short[] {1,10,100};
+            zavod_number = 0; conc4 =0; conc3 = 0; conc2 = 0; conc1 = 0;
+            if (HIDEMODE) zavod_number = zavod_mulage;
+        }
+
         // Публичный метод получения экземпляра
         public static PG414 getInstance(BluetoothGatt mBGT, BluetoothGattCharacteristic Character, Context context) {
             Log.d("getInstance", "" + mBGT + Character);
@@ -116,6 +127,18 @@ public class PG414 {
             } else {
                 // Если экземпляр уже существует, обновляем GATT и характеристику
                 instance.updateGatt(mBGT, Character);
+            }
+            return instance;
+        }
+
+        //метод получения экземпляра для офлайн режима
+        public static PG414 getInstance(Context context) {
+            if (instance == null) {
+                synchronized (PG414.class) {
+                    if (instance == null) {
+                        instance = new PG414(context);
+                    }
+                }
             }
             return instance;
         }
@@ -297,7 +320,7 @@ public class PG414 {
         }
 
         //Парсим прочитанные динамические параметры
-        public void parseDyn(byte[] answer)
+        public boolean parseDyn(byte[] answer)
         {
             StringBuilder sb = new StringBuilder();
             for (byte b : answer) {
@@ -307,7 +330,7 @@ public class PG414 {
 
             if (answer.length < 21){
                 Log.d("PG414", "Неправильный формат пакета");
-                return;
+                return false;
             }
 
             conc1 = ((answer[5]  & 0xFF) << 8) + (answer[4]  & 0xFF);       //текущая концентрация по 1 каналу
@@ -321,9 +344,10 @@ public class PG414 {
 
             temp = answer[19];
             percent_charge = answer[21];
-
-
             updateErrorCache();
+
+            return true;
+
         }
 
         //Запрос на чтение параметров
@@ -338,6 +362,12 @@ public class PG414 {
             request[3] =(byte) ('0' + Number);
             request[4] =(byte) '#';              //-------
             request[5] =(byte) 0x0D;
+
+            StringBuilder sb = new StringBuilder();
+            for (byte b : request) {
+                sb.append(String.format("%02X ", b));
+            }
+            Log.d("BLE_SEND", "запрос: " + sb.toString());
 
             // Для Android 13 и новее используем новый API
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -586,26 +616,42 @@ public class PG414 {
                 ((state[3] & 0xFF) << 24);
     }
 
-        //Чистим текст от постороних символов
-        public void clean_text()
-        {
-            try {
-                for (byte y = 0; y < 4; y++) {
-                    gazType[y] = gazType[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
-                    gazUnit[y] = gazUnit[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
-                }
-            } catch (Exception ex)
-            {
-                Log.d("PG414", "clean_text error");
+    //Чистим текст от постороних символов
+    public void clean_text()
+    {
+        try {
+            for (byte y = 0; y < 4; y++) {
+                gazType[y] = gazType[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
+                gazUnit[y] = gazUnit[y].replaceAll("[^A-Za-zА-Яа-я0-9%.]", "");
             }
+        } catch (Exception ex)
+        {
+            Log.d("PG414", "clean_text error");
         }
+    }
 
 
     //Чтение характеристики
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         public void startRead()
         {
-            mBluetoothGatt.readCharacteristic(mCharacteristic);
+            boolean result = mBluetoothGatt.readCharacteristic(mCharacteristic);
+            Log.d("startRead", "readCharacteristic " + result);
+
+            int props = mCharacteristic.getProperties();
+
+            if ((props & BluetoothGattCharacteristic.PROPERTY_READ) != 0) {
+                Log.d("BLE", "READ supported");
+            }
+
+            if ((props & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
+                Log.d("BLE", "NOTIFY supported");
+            }
+
+            if ((props & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0) {
+                Log.d("BLE", "INDICATE supported");
+            }
+
         }
 }
 

@@ -1,6 +1,8 @@
 package com.eriskip.ble_pg414;
 import android.Manifest;
 
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 
 import android.content.BroadcastReceiver;
@@ -26,6 +28,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.os.Message;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -54,8 +58,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 
-import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
-import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
+import static android.view.View.GONE;
 import static android.view.View.INVISIBLE;
 import static android.view.View.VISIBLE;
 import static java.lang.Math.abs;
@@ -86,14 +89,18 @@ public class InfoPage extends AppCompatActivity {
     LinearLayout gazLayout3;
     LinearLayout gazLayout4;
 
-//    Button btnReconnect;
+    Button btnReconnect;
     //----------------------------------------------------------------------------------------------
 
     CheckBox cbMoblity;             //детекция неподвижности
     CheckBox cbServer;              //отправка на сервер
     private SharedPreferences prefs;
 
-    public volatile boolean connect_device =  false;                //соединение с устройством
+    private View statusDot;
+
+
+
+    public volatile boolean connect_device = true;                //соединение с устройством
     public volatile boolean connect_server =  false;                             //соединение с сервером
     private boolean alarmMode = false;                              // аварийный режим, сработка порога
     private boolean lastAlarmState = false;                         // штатный режим
@@ -127,6 +134,22 @@ public class InfoPage extends AppCompatActivity {
                 checkBit(err,30);    // Неисправность сенсора
     }
 
+    private boolean isError(int err){
+        if (err == 0) return false;
+
+        return checkBit(err, 18) ||      //Ошибка связи с АЦП
+                checkBit(err, 19) ||     //Ошибка связи с АЦП2
+                checkBit(err, 20) ||     //Ошибка связи с ЛМП1
+                checkBit(err, 21) ||     //Ошибка связи с ЛМП2
+                checkBit(err, 22) ||    //Ошибка связи с ЛМП3
+                checkBit(err, 25) ||    //Чистая флешка архива или CRC flash
+                checkBit(err, 28) ||    //Ошибка платы питания, пин PWGD
+                checkBit(err, 29) ||    //Ошибка акселерометра
+                checkBit(err, 30) ||    //Неисправность сенсора
+                checkBit(err, 31);      //Ошибка расширителя
+
+    }
+
     private boolean checkBit(int err, int bit) {
         return (err & (1 << bit)) != 0;
     }
@@ -137,14 +160,12 @@ public class InfoPage extends AppCompatActivity {
 
     public int fCnt = 0;                                    //номер пакета
 
-    public int connToDev = 0;                      // попытки подключения
     public File arch_file;                         // полный путь файла архива
     String params = "";                            // данные для отправки
 
     private PG414 myPG;
 
-    private Handler infoHandler;
-
+    BLE_manager ble_manager;
 
     @Override
     protected void onDestroy()
@@ -177,13 +198,16 @@ public class InfoPage extends AppCompatActivity {
         }
         return bestLocation;
     }
-
+    NotificationHelper notHelper;                //объект класса уведомлений
+    PermissionHelper permHelper;                //объект класса разрешений
 
     @SuppressLint({"UnspecifiedRegisterReceiverFlag", "SetTextI18n"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Connect.setInfoPage(this);
+        ble_manager = BLE_manager.getInstance(this);
+        notHelper = new NotificationHelper(this);
+        permHelper = new PermissionHelper(this);
 
         fCnt = 0;                                           //счетчик пакетов
 
@@ -193,10 +217,8 @@ public class InfoPage extends AppCompatActivity {
         if (!Connect.offline && !Connect.hideMode)
         {
             myPG.clean_text();                      //Чистим текстовые переменные класса ПГ-414
-            Connect.read_pause = false;
         }
-        else
-            Connect.read_pause = true;
+
         Context context = getApplicationContext();
         //Ассоциаируем UI объекты
         tconc1 = findViewById(R.id.tconc1);
@@ -225,7 +247,7 @@ public class InfoPage extends AppCompatActivity {
         gazLayout3 = findViewById(R.id.gazLayout3);
         gazLayout4 = findViewById(R.id.gazLayout4);
 
-//        btnReconnect = findViewById(R.id.reconnect);            //кнопка переподключения
+        btnReconnect = findViewById(R.id.btnReconnect);            //кнопка переподключения
 
         cbMoblity = findViewById(R.id.cbMoblity);
         if ((myPG.onoff2 & (1 << 10)) == 0) cbMoblity.setChecked(true);
@@ -304,8 +326,6 @@ public class InfoPage extends AppCompatActivity {
 
         if (!Connect.offline) {
             fonValRefreshStart();
-            Log.d("OnCreate", "запускаю чтение динамики");
-            startDynRead();   //запускаем чтение динамики
             if(cbServer.isChecked()){
                 startServerTimer();
             }
@@ -319,45 +339,107 @@ public class InfoPage extends AppCompatActivity {
         cbServer.setOnCheckedChangeListener((buttonView, isChecked1) -> {
             // Сохраняем состояние при изменении
             prefs.edit().putBoolean("moblity_enabled", isChecked1).apply();
-            Log.d("Settings", "Режим неподвижности: " + isChecked1);
+            Log.d("Settings", "Отправка на сервер: " + isChecked1);
             enableSendingToServ();
         });
 
-        infoHandler = new Handler(Looper.getMainLooper()) {
-            @Override
-            public void handleMessage(@NonNull Message msg) {
-                switch (msg.what) {
-                    case 1:
-                        tstatus.setText(R.string.err_connect);
-//                        btnReconnect.setVisibility(VISIBLE);
-                        reconnect();
-                        Log.d("infoHandler", "Ошибка подключения");
-                        break;
-                    case 2:
-                        Log.d("infoHandler", "Подключение успешно, запускаю потоки");
-                        tstatus.setText(R.string.con_restored);
-//                        btnReconnect.setVisibility(INVISIBLE);
-                        connect_device = true;
-                        //Запускаем все потоки
-                        isUpdating = true;
-                        fonValRefreshStart();
-                        if (!Connect.offline) {
-                            Log.d("infoHandler", "запускаю чтение динамики");
-                            startDynRead();
-                        }
+        ble_manager.setBLE_listener((state, msg) -> {
+            switch(state){
+                case DISCONNECTING:
+                    connect_device = false;
+                    notHelper.showDisconnectNotification(this);
+                    tstatus.setText(msg);
+                    Log.d("BLE_listener", "DISCONNECTING нет соединения с устройством");
+                    handler.removeCallbacksAndMessages(null);
+                    if(serverHandler != null){
+                        serverHandler.removeCallbacksAndMessages(null);
+                    }
+                    archiveHandler.removeCallbacksAndMessages(null);
+                    btnReconnect.setVisibility(INVISIBLE);
+                    break;
+                case RECONNECTING:
+                    tstatus.setText(msg);
+                    myPG.status = tState;
+                    Log.d("BLE_listener", "RECONNECTING запускаю переподключение");
 
+                    break;
+                case ERROR:
+                    Log.d("BLE_listener", "ERROR поакзываю сообщение об ошибке");
+                    tstatus.setText(msg);
+                    if (ble_manager.btEnabled) {
+                        btnReconnect.setVisibility(VISIBLE);
+                    }
+                    handler.removeCallbacksAndMessages(null);
+                    if(serverHandler != null){
+                        serverHandler.removeCallbacksAndMessages(null);
+                    }
+                    archiveHandler.removeCallbacksAndMessages(null);
+                    break;
+                case CON_RESTORED:
+                    Log.d("BLE_listener", "CON_RESTORED соединение восстановлено");
+                    tstatus.setText(msg);
+                    connect_device = true;
+                    //запускаем потоки
+                    fonValRefreshStart();
+                    if(cbServer.isChecked()){
                         startServerTimer();
-                        saveArchiveIfNeeded();
-                        break;
-                }
+                    }
+                    saveArchiveIfNeeded();
+                    break;
+                case PACKET_PARSED:
+                    Log.d("BLE_listener", "PACKET_PARSED динамика считана");
+                    if(ble_manager.showMsgForUpdate){
+                        ble_manager.showMsgForUpdate = false;
+                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                    }
+                    blinkDot();
+                    break;
             }
-        };
-        Connect.setHandler(infoHandler);
+        });
 
     }
 
     private boolean isNoneInGaz(int x) {
         return (myPG.gazType[x] + ", " + myPG.gazUnit[x]).contains("none");
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+
+        MenuItem item = menu.findItem(R.id.menu_status);
+
+        if (item != null) {
+            View actionView = item.getActionView();
+
+            if (actionView != null) {
+                statusDot = actionView.findViewById(R.id.statusDot);
+            }
+        }
+
+        return true;
+    }
+
+    private AnimatorSet blinkAnimator;
+
+    private void blinkDot() {
+        if (statusDot == null) return;
+
+        if (blinkAnimator != null) {
+            blinkAnimator.cancel();
+        }
+
+        statusDot.setAlpha(0f);
+
+        ObjectAnimator fadeIn = ObjectAnimator.ofFloat(statusDot, View.ALPHA, 0f, 1f);
+        fadeIn.setDuration(450);
+
+        ObjectAnimator fadeOut = ObjectAnimator.ofFloat(statusDot, View.ALPHA, 1f, 0f);
+        fadeOut.setDuration(450);
+
+        blinkAnimator = new AnimatorSet();
+        blinkAnimator.playSequentially(fadeIn, fadeOut);
+        blinkAnimator.start();
     }
 
     //Обновление параметров GPS
@@ -409,112 +491,27 @@ public class InfoPage extends AppCompatActivity {
         super.onPause();
     }
     boolean sending_archive;   //идет отправка архива
-    public static boolean dynReading = false;   //идет чтение динамики
-
-    /* Поток чтения динамических параметров */
-    private final Handler dynReadHandler = new Handler(Looper.getMainLooper());
-
-    private void startDynRead(){
-
-        dynReadHandler.postDelayed(new Runnable() {
-            @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-            @Override
-            public void run() {
-                dynReading = true;
-                if (!Connect.read_pause) {
-                    new Thread(() -> {
-
-                        try {
-                            if (!dynReading || Connect.read_pause) return;
-                            if (Connect.State_pack == Connect.RX_pack.COMPLETE) {
-                                connToDev = 0;
-                                connect_device = true;
-                            }
-
-                            Log.d("ПГ-414", "Делаю запрос");
-                            if (!dynReading || Connect.read_pause) return;
-                            Connect.State_pack = Connect.RX_pack.DYNPARAM;
-                            myPG.reqDyn();
-
-                            try {
-                                Thread.sleep(2300);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                return;
-                            }
-                            Log.d("dynRead", "dynReading " + dynReading + " read_pause " + Connect.read_pause);
-
-                            if (!dynReading || Connect.read_pause) {
-                                Log.d("dynRead", "Флаг сбросился: " + "dynReading " + dynReading + " read_pause " + Connect.read_pause);
-                                return;
-                            }
-                            myPG.startRead();
-
-                            // Ожидание с таймаутом
-                            waitForCompletion(5000);
-
-                            Log.d("InfoPage", abort_counter + " " + Connect.State_pack);
-
-                            if (abort_counter >= 5 && Connect.State_pack != Connect.RX_pack.COMPLETE) {
-                                Log.d("ПГ-414", "Не могу достучаться " + connToDev);
-                            } else {
-                                Log.d("ПГ-414", "Прочитал");
-                                connToDev = 0;
-                            }
-
-                            abort_counter = 0;
-                        } finally {
-                            // Планируем следующий запуск
-                            if (dynReading) {
-                                dynReadHandler.postDelayed(this, 500);
-                            }
-                        }
-
-                    }).start();
 
 
+    byte abort_counter = 0;
 
-                }
-
-
-
-            }
-        }, 0);
-    }
-
-    private void waitForCompletion(int timeout) {
-        Log.d("dynRead","Ожидание с таймаутом");
-        long start = System.currentTimeMillis();
-        while (Connect.State_pack != Connect.RX_pack.COMPLETE && System.currentTimeMillis() - start < timeout) {
-            if (Connect.read_pause) return;
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-                break;
-            }
-        }
-    }
-        byte abort_counter = 0;
-
-        ///Таймер для обновления графического интерфейса в зависимости от показаний
-        private final Handler handler = new Handler(Looper.getMainLooper());
+    ///Таймер для обновления графического интерфейса в зависимости от показаний
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     private void fonValRefreshStart() {
 
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                if (!isUpdating) return;
 
                 UIUpdate();
                 Construct_JobInfo();
                 abort_counter++;
 
-                if (isUpdating) {
-                    handler.postDelayed(this, 1500); // повторяем каждые 1.5 сек
-                }
+                handler.postDelayed(this, 1500); // повторяем каждые 1.5 сек
+
             }
-        }, 2000); // первый запуск через 2 сек
+        }, 500); // первый запуск через 2 сек
     }
 
     private Handler serverHandler;
@@ -909,24 +906,33 @@ public class InfoPage extends AppCompatActivity {
      public void backToConnect(View v){
          Log.d("InfoPage","Меня сломали. Гасим сервисы");
          stopService(new Intent(this, GPS_service.class));
-         if(Connect.isReconnecting) Connect.isReconnecting = false;
 
          handler.removeCallbacksAndMessages(null);
          if(serverHandler != null){
              serverHandler.removeCallbacksAndMessages(null);
          }
-         dynReadHandler.removeCallbacksAndMessages(null);
-         dynReading = false;
          archiveHandler.removeCallbacksAndMessages(null);
          PG414.removeInstance();
-         Connect.breaker = true;
-         if (reconnectThread != null) {
-             reconnectThread.interrupt();
-             reconnectThread = null;
-         }
-         Connect.setInfoPage(null);
+         ble_manager.openPage = false;
          finish();
      }
+
+     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+     public void reconnect(View v){
+        Log.d("InfoPage", "пользователь нажал Подключиться");
+        if(!permHelper.checkBTPermissions()){
+            permHelper.requestBTPermissions(this);
+            return;
+        }
+        ble_manager.reconnect();
+     }
+
+    public void refreshData(View v){
+        Log.d("InfoPage", "пользователь нажал Обновить данные о приборе");
+        if(!Connect.offline && !Connect.hideMode){
+            ble_manager.isRefreshPressed = true;
+        }
+    }
 
     @Override
     public void onBackPressed() {
@@ -1001,89 +1007,72 @@ public class InfoPage extends AppCompatActivity {
 
     String tState;
 
-    private volatile boolean isUpdating = true;
     @SuppressLint("SetTextI18n")
     public void UIUpdate()
     {
-            if (!Connect.read_pause) {
+        Log.d("UIUpdate", "UIUpdate");
+        //Применяем дискретность газов
+        NumberFormat[] nf;
+        nf = new NumberFormat[4];
+        for (byte j =0; j < 4; j++)
+        {
+            nf[j] = NumberFormat.getInstance();
 
-                //Применяем дискретность газов
-                NumberFormat[] nf;
-                nf = new NumberFormat[4];
-                for (byte j =0; j < 4; j++)
-                {
-                    nf[j] = NumberFormat.getInstance();
+            int digits = Math.abs(myPG.gazDiskret[j]);
 
-                    int digits = Math.abs(myPG.gazDiskret[j]);
+            nf[j].setMaximumFractionDigits(digits);
+            nf[j].setMinimumFractionDigits(digits);
+            nf[j].setGroupingUsed(false);
+        }
+        //В данном коде выводим форматированную     концентрацию                 при этом учитываем          дискретность
+        tconc1.setText(nf[0].format(myPG.conc1/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[0])])));
+        tconc2.setText(nf[1].format(myPG.conc2/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[1])])));
+        tconc3.setText(nf[2].format(myPG.conc3/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[2])])));
+        tconc4.setText(nf[3].format(myPG.conc4/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[3])])));
+        //Процент заряда батареи
+        charge.setText(getResources().getString(R.string.Charge) + " " + myPG.percent_charge + "%");
+        //Температура
+        temp.setText(getResources().getString(R.string.Temperature) + " " + myPG.temp + "°C");
 
-                    nf[j].setMaximumFractionDigits(digits);
-                    nf[j].setMinimumFractionDigits(digits);
-                    nf[j].setGroupingUsed(false);
-                }
-                //В данном коде выводим форматированную     концентрацию                 при этом учитываем          дискретность
-                tconc1.setText(nf[0].format(myPG.conc1/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[0])])));
-                tconc2.setText(nf[1].format(myPG.conc2/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[1])])));
-                tconc3.setText(nf[2].format(myPG.conc3/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[2])])));
-                tconc4.setText(nf[3].format(myPG.conc4/(float)(myPG.gazDelitel[abs(myPG.gazDiskret[3])])));
-                //Процент заряда батареи
-                charge.setText(getResources().getString(R.string.Charge) + myPG.percent_charge + "%");
-                //Температура
-                temp.setText(getResources().getString(R.string.Temperature) + myPG.temp + "°C");
-
-                if (!connect_server && cbServer.isChecked()) {                                 //Если не подключен к серверу
-                    errcon.setText(R.string.Server_aerror);
-                    errcon.setVisibility(VISIBLE);
-                    disconnect.setVisibility(VISIBLE);
-                }
-                else {
-                    errcon.setVisibility(INVISIBLE);
-                    disconnect.setVisibility(INVISIBLE);
-                }
-
+        if (!connect_server && cbServer.isChecked()) {                                 //Если не подключен к серверу
+            errcon.setText(R.string.Server_aerror);
+            errcon.setVisibility(VISIBLE);
+            disconnect.setVisibility(VISIBLE);
+        }
+        else {
+            errcon.setVisibility(INVISIBLE);
+            disconnect.setVisibility(GONE);
+        }
 
 
-                if (lines_archive > 0)                                   //если есть записи в архиве, то выводим их количество на экран
-                {
-                    arch_cnt.setVisibility(VISIBLE);
-                    arch_alert.setVisibility(VISIBLE);
-                    arch_cnt.setText(lines_archive+"");
-                    if (sending_archive)
-                        tstatus.setText(R.string.Sendnig_Arch);
-                } else
-                {
-                    arch_cnt.setVisibility(INVISIBLE);
-                    arch_alert.setVisibility(INVISIBLE);
-                }
+        /*Обновляем информацию по GPS*/
+        if (!"none".equals(param_lat_lon)) {
+            tgps.setText(param_lat_lon);
+            myPG.gps = param_lat_lon;
+        }
 
-                /*Обновляем информацию по GPS*/
-                if (!"none".equals(param_lat_lon)) {
-                    tgps.setText(param_lat_lon);
-                    myPG.gps = param_lat_lon;
-                }
+        //Статус
+        tState = myPG.Make_State();
+        int err = myPG.getErrorBits();
 
-            }
-            //Статус
-            tState = myPG.Make_State();
+        tstatus.setTextColor(isError(err) ? Color.RED : getColor(R.color.textColor));
 
-            connToDev++;                                            //увеличиываем счетчик попыток подключения. он сбрасывается при успешном чтении
-            if (connToDev > 222) connToDev = 11;
-            Log.d("UIUpdate", "Попыток подключения: " + String.valueOf(connToDev) + "Гад: " + myPG.mBluetoothGatt);
+        tstatus.setText(tState);
 
+        if (lines_archive > 0)                                   //если есть записи в архиве, то выводим их количество на экран
+        {
+            arch_cnt.setVisibility(VISIBLE);
+            arch_alert.setVisibility(VISIBLE);
+            arch_cnt.setText(lines_archive+"");
+            if (sending_archive)
+                tstatus.setText(R.string.Sendnig_Arch);
+        } else
+        {
+            arch_cnt.setVisibility(INVISIBLE);
+            arch_alert.setVisibility(INVISIBLE);
+        }
 
-
-            //если попыток было 5 а информации от ПГ-414 не поступала выводим сообщение
-            if (connToDev > 10 && !sending_archive || Connect.mConnectionState == STATE_DISCONNECTED) {
-                connect_device = false;
-                tState = getString(R.string.connect);
-                myPG.status = tState;
-                Log.d("UIUpdate", "нет соединения с устройством, обновляю статус и запускаю переподключение");
-                isUpdating = false;
-                reconnect();
-            }
-//            btnReconnect.setVisibility(!connect_device && !Connect.isReconnecting ? VISIBLE : INVISIBLE);
-            tstatus.setText(tState);
-
-            colorSensorIfAlarm();               //подсвечиваем сенсор, если сработал порог или превышение
+        colorSensorIfAlarm();               //подсвечиваем сенсор, если сработал порог или превышение
     }
 
     private void colorSensorIfAlarm(){
@@ -1102,28 +1091,6 @@ public class InfoPage extends AppCompatActivity {
             }
         }
     }
-
-    Connect connect = new Connect();
-    Thread reconnectThread;
-   public void reconnect(){
-       Log.d("reconnect", "Переподключаюсь");
-       handler.removeCallbacksAndMessages(null);
-       if(serverHandler != null){
-           serverHandler.removeCallbacksAndMessages(null);
-       }
-       dynReadHandler.removeCallbacksAndMessages(null);
-       dynReading = false;
-       archiveHandler.removeCallbacksAndMessages(null);
-       Connect.isReconnecting = true;
-       connect.close();
-
-       new Handler(Looper.getMainLooper()).postDelayed(() ->{
-           reconnectThread = new Thread(connect.runnable_connect);
-           reconnectThread.start();
-       }, 1500);
-
-
-   }
 
     private final Handler archiveHandler = new Handler(Looper.getMainLooper());
 
@@ -1304,7 +1271,6 @@ public class InfoPage extends AppCompatActivity {
         Toast.makeText(this, view.getContentDescription(), Toast.LENGTH_SHORT).show();
 
     }
-    ///
 
     private void enableSendingToServ(){
         if(cbServer.isChecked()){
@@ -1318,18 +1284,13 @@ public class InfoPage extends AppCompatActivity {
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private void setCheck()
     {
+        if(!permHelper.checkBTPermissions()){
+            permHelper.requestBTPermissions(this);
+            return;
+        }
         if(!Connect.offline && !Connect.hideMode){
-            Connect.read_pause = true;
-            Connect.State_pack = Connect.RX_pack.PARAMS;
-            Connect.isSetCheck = true;
-            if (!cbMoblity.isChecked())
-            {
-                myPG.setParamOnOff((short) 0, (short)(1 << 10),'+');
-            }
-            else
-            {
-                myPG.setParamOnOff((short)0, (short)(1 << 10),'-');
-            }
+            ble_manager.isSetCheckPressed = true;
+            ble_manager.setCheck = cbMoblity.isChecked();
         }
 
     }

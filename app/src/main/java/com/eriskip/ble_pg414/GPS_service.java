@@ -41,7 +41,7 @@ public class GPS_service extends Service {
     }
 
     public void onCreate() {
-        Log.d("ssServiceGPS", "GPS_service onStartCommand");
+        Log.d("ssServiceGPS", "GPS_service onCreate");
         NotificationCompat.Builder builder = new
                 NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.bluetooth)
@@ -100,6 +100,7 @@ public class GPS_service extends Service {
     //При старте, согласно тербованиям API Android v 8.0+ необходимо оповестить пользователя о работе
     public int onStartCommand(Intent intent, int flags, int startId) {
         //запускаем в потоке
+        Log.d("GPS", "GPS_service onStartCommand");
         int mode = intent.getIntExtra("mode", 1);
         if (mode == 2) {
             provider = locationManager.getBestProvider(criteria, true);
