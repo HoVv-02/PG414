@@ -124,6 +124,7 @@ public class Connect extends AppCompatActivity {
                 }
             }
 
+            connectPressed = false;
             ble_manager.disconnectFromUser = true;
             if (!hideMode) {
                 ble_manager.disconnect();
@@ -302,15 +303,16 @@ public class Connect extends AppCompatActivity {
                     pgBar.setVisibility(View.INVISIBLE);
                     stateText.setVisibility(View.INVISIBLE);
                     startScanningButton.setVisibility(View.VISIBLE);
-                    Log.d("BLE_listener", "Открываю активити");
-                    Intent intent = new Intent(Connect.this, InfoPage.class);
-                    intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                    startActivityForResult(intent, CHOOSE_THIEF);
+                    if(!ble_manager.newConnecting){
+                        Log.d("BLE_listener", "Открываю активити");
+                        Intent intent = new Intent(Connect.this, InfoPage.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                        startActivityForResult(intent, CHOOSE_THIEF);
+                    }
                     break;
                 default:
-                    runOnUiThread(() ->{
-                        stateText.setText(message);
-                    });
+                    stateText.setText(message);
+
                     break;
             }
         });
@@ -518,6 +520,8 @@ public class Connect extends AppCompatActivity {
         );
     }
 
+    private boolean connectPressed = false;
+    int index;
 
     //Подключение к выбранному BLE устройству
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -529,6 +533,8 @@ public class Connect extends AppCompatActivity {
             return;
         }
 
+        index = ind;
+
         if(ble_manager.disconnectFromUser){
             ble_manager.disconnectFromUser = false;
         }
@@ -539,7 +545,16 @@ public class Connect extends AppCompatActivity {
         peripheralTextView.setText(R.string.connect);
         startScanningButton.setVisibility(View.INVISIBLE);
 
-        ble_manager.connect(ind);
+        if(connectPressed){
+            ble_manager.changeDevice(ind);
+            Log.d("Connect_to_BLE", "Пользователь нажална девайс второй раз, инициирую новое подключение");
+        }else{
+            Log.d("Connect_to_BLE", "Пользователь нажална девайс первый раз, инициирую подключение");
+            ble_manager.connect(ind);
+        }
+        connectPressed = true;
+
+
     }
 
 

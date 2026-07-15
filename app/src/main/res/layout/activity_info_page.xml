@@ -265,19 +265,35 @@
         android:text="Нет соединения с сервером. Ошибка связи"
         android:visibility="invisible"
         app:layout_constraintEnd_toStartOf="@+id/arch_alert"
-        app:layout_constraintStart_toEndOf="@id/refreshBtn"
+        app:layout_constraintStart_toEndOf="@id/frameRefresh"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <ImageButton
-        android:id="@+id/refreshBtn"
+
+    <FrameLayout
+        android:id="@+id/frameRefresh"
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:background="@color/colorPrimary"
+        android:clickable="true"
         android:contentDescription="@string/Refresh_data"
-        android:onClick="refreshData"
+        android:focusable="true"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:srcCompat="@drawable/baseline_refresh_24" />
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- Фон -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/colorPrimary"/>
+
+        <!-- Стрелка -->
+        <ImageView
+            android:id="@+id/imgRefresh"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            app:srcCompat="@drawable/baseline_refresh_24"/>
+
+    </FrameLayout>
 
     <ImageView
         android:id="@+id/disconnect"

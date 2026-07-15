@@ -63,7 +63,8 @@ public class BLE_manager {
         CON_RESTORED,
         RECONNECTING,
         DISCONNECTING,
-        ERROR
+        ERROR,
+        CHANGE_DEVICE
     }
 
     private final Context context;
@@ -181,6 +182,8 @@ public class BLE_manager {
         notifyState(ConnectionState.CONNECTING, State_of_connection);
     }
 
+    public boolean connectPressed = false;
+
     private final Handler reconnectHandler = new Handler(Looper.getMainLooper());
 
     private Runnable reconnectTimeoutRunnable;
@@ -201,10 +204,13 @@ public class BLE_manager {
         }
 
         reconnectTimeoutRunnable = () -> {
-            if(btEnabled){
+            mBluetoothGatt.close();
+            mBluetoothGatt = null;
+            if (btEnabled) {
                 connToDev++;
                 reconnect();
             }
+
         };
         reconnectHandler.postDelayed(reconnectTimeoutRunnable, 1500);
     }
@@ -228,6 +234,33 @@ public class BLE_manager {
             Log.d("reconnect", "Запускаю реконект");
             connect(index);
         }, 200);
+    }
+
+    private final Handler changeDeviceHandler = new Handler(Looper.getMainLooper());
+
+    private Runnable changeDeviceTimeoutRunnable;
+    public boolean newConnecting = false;
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    public void changeDevice(int ind){
+        removeCallbacks();
+        be_connect = false;
+        newConnecting = true;
+
+        index = ind;
+
+        if (mBluetoothGatt != null) {
+            mBluetoothGatt.disconnect();
+        }
+
+        changeDeviceTimeoutRunnable = () -> {
+            if (mBluetoothGatt != null) {
+                mBluetoothGatt.close();
+                mBluetoothGatt = null;
+            }
+            connect(ind);
+        };
+        changeDeviceHandler.postDelayed(changeDeviceTimeoutRunnable, 1500);
     }
 
     public boolean openPage = false;
@@ -360,7 +393,9 @@ public class BLE_manager {
         serviceHandler.removeCallbacks(serviceTimeoutRunnable);
         connectHandler.removeCallbacks(connectTimeoutRunnable);
         reconnectHandler.removeCallbacks(reconnectTimeoutRunnable);
+        changeDeviceHandler.removeCallbacks(changeDeviceTimeoutRunnable);
     }
+
 
     public BluetoothGattCallback bluetoothGattCallback = new BluetoothGattCallback(){
 
@@ -375,6 +410,11 @@ public class BLE_manager {
                 connToDev = 0;
                 mConnectionState = STATE_CONNECTED;
                 be_connect = true;
+
+                if(newConnecting){
+                    Log.d("onConnectionStateChange", "Соединение с новым устройством установлено");
+                    newConnecting = false;
+                }
                 if(isReconnecting) {
                     State_of_connection = context.getResources().getString(R.string.con_restored);
                     notifyState(ConnectionState.CON_RESTORED, State_of_connection);
@@ -403,7 +443,14 @@ public class BLE_manager {
                     mBluetoothGatt = null;
                 }
 
+                if(newConnecting){
+                    connect(index);
+                    return;
+                }
+
                 Log.d("onConnectionStateChange",  "disconnectFromUser " + disconnectFromUser + " btEnabled " + btEnabled);
+
+
                 if(!disconnectFromUser && btEnabled){
                     connToDev++;
                     reconnect();

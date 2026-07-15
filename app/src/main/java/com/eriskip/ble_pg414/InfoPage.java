@@ -38,9 +38,12 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.animation.LinearInterpolator;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -97,6 +100,8 @@ public class InfoPage extends AppCompatActivity {
     LinearLayout gazLayout4;
 
     Button btnReconnect;
+    ImageView btnRefresh;
+    FrameLayout frameRefresh;
     //----------------------------------------------------------------------------------------------
 
     CheckBox cbMoblity;             //детекция неподвижности
@@ -253,6 +258,8 @@ public class InfoPage extends AppCompatActivity {
         gazLayout4 = findViewById(R.id.gazLayout4);
 
         btnReconnect = findViewById(R.id.btnReconnect);            //кнопка переподключения
+        btnRefresh = findViewById(R.id.imgRefresh);                 //кнопка "Обновить данные об устройстве"
+        frameRefresh = findViewById(R.id.frameRefresh);
 
         cbMoblity = findViewById(R.id.cbMoblity);
         if ((myPG.onoff2 & (1 << 10)) == 0) cbMoblity.setChecked(true);
@@ -343,6 +350,10 @@ public class InfoPage extends AppCompatActivity {
             enableSendingToServ();
         });
 
+        frameRefresh.setOnClickListener(view -> {
+            refreshData();
+        });
+
         ble_manager.setBLE_listener((state, msg) -> {
             switch (state) {
                 case DISCONNECTING:
@@ -394,6 +405,7 @@ public class InfoPage extends AppCompatActivity {
                         gaz2.setText(isNoneInGaz(1) ? "Отключено" : myPG.gazType[1] + ", " + myPG.gazUnit[1]);
                         gaz3.setText(isNoneInGaz(2) ? "Отключено" : myPG.gazType[2] + ", " + myPG.gazUnit[2]);
                         gaz4.setText(isNoneInGaz(3) ? "Отключено" : myPG.gazType[3] + ", " + myPG.gazUnit[3]);
+                        stopRefreshAnimation();
                         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
                     }
                     blinkDot();
@@ -922,12 +934,46 @@ public class InfoPage extends AppCompatActivity {
         ble_manager.reconnect();
     }
 
-    public void refreshData(View v) {
+    public void refreshData() {
         Log.d("InfoPage", "пользователь нажал Обновить данные о приборе");
         if (!Connect.offline && !Connect.hideMode) {
+            startRefreshAnimation();
             ble_manager.isRefreshPressed = true;
         }
     }
+
+    private ObjectAnimator refreshAnimator;
+
+    private void startRefreshAnimation() {
+
+        if (refreshAnimator != null && refreshAnimator.isRunning()) {
+            return;
+        }
+
+        refreshAnimator = ObjectAnimator.ofFloat(
+                btnRefresh,
+                View.ROTATION,
+                0f,
+                360f
+        );
+
+        refreshAnimator.setDuration(800); // один оборот за 0.8 сек
+        refreshAnimator.setInterpolator(new LinearInterpolator());
+        refreshAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        refreshAnimator.setRepeatMode(ValueAnimator.RESTART);
+
+        refreshAnimator.start();
+    }
+
+    private void stopRefreshAnimation() {
+
+        if (refreshAnimator != null) {
+            refreshAnimator.cancel();
+            btnRefresh.setRotation(0f);
+            refreshAnimator = null;
+        }
+    }
+
 
     @Override
     public void onBackPressed() {
