@@ -382,8 +382,6 @@ public class Connect extends AppCompatActivity {
                     }
 
 
-
-
                     currentDevice = getResources().getString(R.string.Device) + result.getDevice().getName();                         //текущее устройство
                     if (!DeviceList.contains(currentDevice)) {                                         //если тек. устройства нет в списке
                         DeviceList.add(currentDevice);                                                 //добавляем его

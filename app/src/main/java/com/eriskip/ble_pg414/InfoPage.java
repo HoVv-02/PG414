@@ -356,6 +356,9 @@ public class InfoPage extends AppCompatActivity {
             refreshData();
         });
 
+        setLongClickDescription(frameRefresh);
+        setLongClickDescription(arch_alert);
+
         ble_manager.setBLE_listener((state, msg) -> {
             switch (state) {
                 case DISCONNECTING:
@@ -418,6 +421,22 @@ public class InfoPage extends AppCompatActivity {
             }
         });
 
+    }
+
+    private void setLongClickDescription(View view) {
+        view.setOnLongClickListener(v -> {
+            CharSequence description = v.getContentDescription();
+
+            if (description != null && description.length() > 0) {
+                Toast.makeText(
+                        v.getContext(),
+                        description,
+                        Toast.LENGTH_SHORT
+                ).show();
+            }
+
+            return true;
+        });
     }
 
     private boolean isNoneInGaz(int x) {
