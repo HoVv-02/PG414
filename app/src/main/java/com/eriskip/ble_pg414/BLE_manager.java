@@ -64,7 +64,8 @@ public class BLE_manager {
         RECONNECTING,
         DISCONNECTING,
         ERROR,
-        CHANGE_DEVICE
+        CHANGE_DEVICE,
+        READ_RSSI
     }
 
     private final Context context;
@@ -394,6 +395,26 @@ public class BLE_manager {
         connectHandler.removeCallbacks(connectTimeoutRunnable);
         reconnectHandler.removeCallbacks(reconnectTimeoutRunnable);
         changeDeviceHandler.removeCallbacks(changeDeviceTimeoutRunnable);
+        rssiReadHandler.removeCallbacks(rssiReadRunnable);
+    }
+
+    private final Handler rssiReadHandler = new Handler(Looper.getMainLooper());
+
+    private final Runnable rssiReadRunnable = new Runnable() {
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+        @Override
+        public void run() {
+
+            if (mBluetoothGatt != null) {
+                mBluetoothGatt.readRemoteRssi();
+            }
+
+            rssiReadHandler.postDelayed(this, 2000);
+        }
+    };
+
+    private void startReadRssi() {
+        rssiReadHandler.post(rssiReadRunnable);
     }
 
 
@@ -410,6 +431,9 @@ public class BLE_manager {
                 connToDev = 0;
                 mConnectionState = STATE_CONNECTED;
                 be_connect = true;
+
+                startReadRssi();
+
 
                 if(newConnecting){
                     Log.d("onConnectionStateChange", "Соединение с новым устройством установлено");
@@ -627,6 +651,16 @@ public class BLE_manager {
         public void onCharacteristicChanged(@NonNull @NotNull BluetoothGatt gatt, @NonNull @NotNull BluetoothGattCharacteristic characteristic, @NonNull @NotNull byte[] value) {
             super.onCharacteristicChanged(gatt, characteristic, value);
             Log.d("onCharacteristicChanged", "" + characteristic.getUuid());
+        }
+
+        @Override
+        public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
+            super.onReadRemoteRssi(gatt, rssi, status);
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d("BLE", "RSSI = " + rssi + " dBm");
+                String RSSI = String.valueOf(rssi);
+                notifyState(ConnectionState.READ_RSSI, RSSI);
+            }
         }
     };
 

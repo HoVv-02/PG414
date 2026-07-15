@@ -169,6 +169,8 @@ public class InfoPage extends AppCompatActivity {
     public final static String PARAM_TASK = "task";
     public static String param_lat_lon = "none";                  //координаты полученные от сервиса - Широта
 
+    public String rssi;
+
     public int fCnt = 0;                                    //номер пакета
 
     public File arch_file;                         // полный путь файла архива
@@ -325,8 +327,8 @@ public class InfoPage extends AppCompatActivity {
             startService(new Intent(this, GPS_service.class));
         }
         //Обновляем GPS
-        Location lastKnownLocation = getLastKnownLocation();
-        UpdateLocation(lastKnownLocation);
+//        Location lastKnownLocation = getLastKnownLocation();
+//        UpdateLocation(lastKnownLocation);
         //----------------------------------
         //потоки
 
@@ -410,6 +412,9 @@ public class InfoPage extends AppCompatActivity {
                     }
                     blinkDot();
                     break;
+                case READ_RSSI:
+                    Log.d("BLE_listener", "READ_RSSI сигнал считан");
+                    rssi = msg;
             }
         });
 
@@ -495,8 +500,10 @@ public class InfoPage extends AppCompatActivity {
     protected void onPause() {
         Log.d("ON PAUSE RUN", "Я пошел спать");
         /*При переходе в сон выставляем режим провайдора location NETWORK*/
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(new Intent(this, GPS_service.class).putExtra("mode", 2));
+        if (ble_manager.openPage) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(new Intent(this, GPS_service.class).putExtra("mode", 2));
+            }
         }
         //При остановке переводим GPS позиционирование на другой сервис
         super.onPause();
@@ -713,6 +720,13 @@ public class InfoPage extends AppCompatActivity {
                 object.put("conc4", Double.parseDouble(text4));
                 object.put("measure_unit4", PG414.getInstance().gazUnit[3]);
 
+                JSONObject coord = new JSONObject();
+                coord.put("lat", lat);
+                coord.put("lng", lng);
+                object.put("coord", coord);
+
+                object.put("rssi", rssi);
+
                 object.put("battery_percent", PG414.getInstance().percent_charge);
 
                 json.put("object", object);
@@ -913,6 +927,7 @@ public class InfoPage extends AppCompatActivity {
     public void backToConnect(View v) {
         Log.d("InfoPage", "Меня сломали. Гасим сервисы");
         stopService(new Intent(this, GPS_service.class));
+        ble_manager.openPage = false;
 
         handler.removeCallbacksAndMessages(null);
         if (serverHandler != null) {
@@ -920,7 +935,6 @@ public class InfoPage extends AppCompatActivity {
         }
         archiveHandler.removeCallbacksAndMessages(null);
         PG414.removeInstance();
-        ble_manager.openPage = false;
         finish();
     }
 
@@ -1043,6 +1057,9 @@ public class InfoPage extends AppCompatActivity {
     String tState;
     String stateSensor;
 
+    String lat;
+    String lng;
+
     @SuppressLint("SetTextI18n")
     public void UIUpdate() {
         Log.d("UIUpdate", "UIUpdate");
@@ -1082,6 +1099,9 @@ public class InfoPage extends AppCompatActivity {
         if (!"none".equals(param_lat_lon)) {
             tgps.setText(param_lat_lon);
             myPG.gps = param_lat_lon;
+            String[] parts = param_lat_lon.split(", ");
+            lat = parts[0];
+            lng = parts[1];
         }
 
         //Статус
@@ -1216,6 +1236,13 @@ public class InfoPage extends AppCompatActivity {
                             text4 = text4.replace(',', '.');
                             object.put("conc4", Double.parseDouble(text4));
                             object.put("measure_unit4", PG414.getInstance().gazUnit[3]);
+
+                            JSONObject coord = new JSONObject();
+                            coord.put("lat", lat);
+                            coord.put("lng", lng);
+                            object.put("coord", coord);
+
+                            object.put("rssi", rssi);
 
                             object.put("battery_percent", PG414.getInstance().percent_charge);
 
