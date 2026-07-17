@@ -63,6 +63,7 @@ public class BLE_manager {
         CON_RESTORED,
         RECONNECTING,
         DISCONNECTING,
+        DISCONNECTED,
         ERROR,
         CHANGE_DEVICE,
         READ_RSSI
@@ -189,13 +190,18 @@ public class BLE_manager {
 
     private Runnable reconnectTimeoutRunnable;
 
+    public boolean needToConnect = true;
+
     @SuppressLint("MissingPermission")
     public void disconnect() {
         if (mBluetoothGatt == null) {
             return;
         }
+        removeCallbacks();
+
         State_of_connection = context.getResources().getString(R.string.disconnecting);
         notifyState(ConnectionState.DISCONNECTING, State_of_connection);
+
 
         try {
             Log.d("disconnect", "disconnect");
@@ -207,6 +213,11 @@ public class BLE_manager {
         reconnectTimeoutRunnable = () -> {
             mBluetoothGatt.close();
             mBluetoothGatt = null;
+            if(!needToConnect || disconnectFromUser) {
+                State_of_connection = context.getResources().getString(R.string.disconnected);
+                notifyState(ConnectionState.DISCONNECTED, State_of_connection);
+                return;
+            }
             if (btEnabled) {
                 connToDev++;
                 reconnect();
@@ -456,8 +467,6 @@ public class BLE_manager {
                 Log.i("onConnectionStateChange", "Disconnected from GATT server.");
                 mConnectionState = STATE_DISCONNECTED;
                 be_connect = false;
-                State_of_connection = context.getResources().getString(R.string.disconnecting);
-                notifyState(ConnectionState.DISCONNECTING, State_of_connection);
 
                 removeCallbacks();
 
@@ -467,15 +476,25 @@ public class BLE_manager {
                     mBluetoothGatt = null;
                 }
 
+                Log.d("onConnectionStateChange",  "disconnectFromUser " + disconnectFromUser + " needToConnect " + needToConnect);
+
+                if(!needToConnect || disconnectFromUser) {
+                    State_of_connection = context.getResources().getString(R.string.disconnected);
+                    notifyState(ConnectionState.DISCONNECTED, State_of_connection);
+                    return;
+                }
+
                 if(newConnecting){
                     connect(index);
                     return;
                 }
 
-                Log.d("onConnectionStateChange",  "disconnectFromUser " + disconnectFromUser + " btEnabled " + btEnabled);
+
+                State_of_connection = context.getResources().getString(R.string.disconnecting);
+                notifyState(ConnectionState.DISCONNECTING, State_of_connection);
 
 
-                if(!disconnectFromUser && btEnabled){
+                if(btEnabled){
                     connToDev++;
                     reconnect();
                 }

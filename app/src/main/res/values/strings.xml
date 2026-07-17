@@ -13,6 +13,7 @@
     <string name="params_reading">Reading params</string>
     <string name="connect">Connecting...</string>
     <string name="disconnecting">Disconnecting...</string>
+    <string name="disconnected">Disconnected</string>
     <string name="services_search">Search for services</string>
     <string name="characteristic_search">Search for characteristic</string>
     <string name="dyn_reading">Reading dynamic parameters</string>
@@ -57,5 +58,6 @@
     <string name="channel_description">Notification</string>
     <string name="con_lost">Lost connection with device</string>
     <string name="immobility">Immobility sensor</string>
+    <string name="send_to_server">Send to server</string>
     <string name="check_gps">Check gps settings</string>
 </resources>

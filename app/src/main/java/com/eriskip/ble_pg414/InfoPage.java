@@ -18,6 +18,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationManager;
@@ -26,6 +27,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresPermission;
 import androidx.core.app.ActivityCompat;
@@ -34,6 +36,9 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.os.Bundle;
 import android.os.Message;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -64,9 +69,11 @@ import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import static android.view.View.GONE;
 import static android.view.View.INVISIBLE;
@@ -75,6 +82,7 @@ import static java.lang.Math.abs;
 
 import com.eriskip.ble_pg414.library.PG414;
 
+import org.jetbrains.annotations.NotNull;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -161,6 +169,33 @@ public class InfoPage extends AppCompatActivity {
 
     }
 
+    public String[] errorsToColorRUS = {
+            "Ошибка связи с АЦП",
+            "Ошибка связи с АЦП2",
+            "Ошибка связи с ЛМП1",
+            "Ошибка связи с ЛМП2",
+            "Ошибка связи с ЛМП3",
+            "Ошибка радиомодуля",
+            "Ошибка платы питания, пин PWGD",
+            "Ошибка акселерометра",
+            "Неисправность сенсора",
+            "Ошибка расширителя"
+    };
+
+    public String[] errorsToColorEN = {
+            "DAC communication error",
+            "DAC2 communication error",
+            "LMP1 communication error",
+            "LMP2 communication error",
+            "LMP3 communication error",
+            "Radio module error",
+            "Power board error, pin PWGD",
+            "Accelerometer error",
+            "Sensor malfunction",
+            "Extender error"
+    };
+
+
     private boolean checkBit(int err, int bit) {
         return (err & (1 << bit)) != 0;
     }
@@ -182,9 +217,26 @@ public class InfoPage extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        Log.d("InfoPage", "onDestroy");
+        stopService(new Intent(this, GPS_service.class));
+        ble_manager.needToConnect = false;
+        ble_manager.disconnect();
+        handler.removeCallbacksAndMessages(null);
+        if (serverHandler != null) {
+            serverHandler.removeCallbacksAndMessages(null);
+        }
+        archiveHandler.removeCallbacksAndMessages(null);
+        btnReconnect.setVisibility(INVISIBLE);
         super.onDestroy();
     }
 
+    @Override
+    public void onConfigurationChanged(@NotNull Configuration newConfig){
+
+        super.onConfigurationChanged(newConfig);
+
+        Log.d("onConfigurationChanged", " onConfigurationChanged");
+    }
     LocationManager mLocationManager;
 
     private Location getLastKnownLocation() {
@@ -357,13 +409,24 @@ public class InfoPage extends AppCompatActivity {
         });
 
         setLongClickDescription(frameRefresh);
-        setLongClickDescription(arch_alert);
+        printToast(arch_alert);
+
+        getOnBackPressedDispatcher().addCallback(this,
+                new OnBackPressedCallback(true) {
+                    @Override
+                    public void handleOnBackPressed() {
+                        backToConnect(null);
+                    }
+                });
 
         ble_manager.setBLE_listener((state, msg) -> {
             switch (state) {
                 case DISCONNECTING:
                     connect_device = false;
-                    notHelper.showDisconnectNotification(this);
+                    Log.d("InfoPage", "Показваю уведомление об отключении");
+                    if(ble_manager.needToConnect){
+                        notHelper.showDisconnectNotification(this);
+                    }
                     tstatus.setText(msg);
                     Log.d("BLE_listener", "DISCONNECTING нет соединения с устройством");
                     handler.removeCallbacksAndMessages(null);
@@ -1008,11 +1071,6 @@ public class InfoPage extends AppCompatActivity {
     }
 
 
-    @Override
-    public void onBackPressed() {
-        super.onBackPressed();
-        backToConnect(null);
-    }
 
     //Ввод адреса сервера
     public void enterServer(View v) {
@@ -1124,17 +1182,64 @@ public class InfoPage extends AppCompatActivity {
         }
 
         //Статус
-        tState = myPG.Make_State();
-        int err = myPG.getErrorBits();
 
-        tstatus.setTextColor(isError(err) ? Color.RED : getColor(R.color.textColor));
+        tState = myPG.Make_State();
         Log.d("UIUpdate", "tState = '" + tState + "'");
-        tstatus.setText(tState);
+
+        int err = myPG.getErrorBits();
+        String[] lines = tState.split(",\n");
+
+        if(isError(err)){
+            Log.d("UIUpdate", "Errors in state");
+            Set<String> errorSet = new HashSet<>(Arrays.asList(myPG.localeRus ? errorsToColorRUS : errorsToColorEN));
+
+            SpannableStringBuilder builder = new SpannableStringBuilder();
+
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i];
+
+                int start = builder.length();
+                builder.append(line);
+                int end = builder.length();
+
+                // Если это ошибка - красим в красный
+                if (errorSet.contains(line)) {
+                    builder.setSpan(
+                            new ForegroundColorSpan(Color.RED),
+                            start,
+                            end,
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    );
+                }
+
+                // Добавляем перенос строки между элементами
+                if (i < lines.length - 1) {
+                    builder.append("\n");
+                }
+            }
+
+            tstatus.setText(builder);
+        }else{
+            tstatus.setText(tState);
+        }
 
         if(isSensorAlarm(err)){
-            String[] parts = tState.split(" - ");
             Log.d("UIUpdate", "Sensor Alarm");
-            stateSensor = parts[1];
+            for(String line : lines){
+                for(int i = 0; i < 12; i++){
+                    if (myPG.localeRus) {
+                        if(line.equals(myPG.array_of_Errors_RUS[i])){
+                            String[] parts = line.split(" - ");
+                            stateSensor = parts[1];
+                        }
+                    }else{
+                        if(line.equals(myPG.array_of_Errors_EN[i])){
+                            String[] parts = line.split(" - ");
+                            stateSensor = parts[1];
+                        }
+                    }
+                }
+            }
         }else{
             stateSensor = "";
         }
@@ -1362,16 +1467,29 @@ public class InfoPage extends AppCompatActivity {
         }
     }
 
-    int Desc_counter = 0;          //показывает сколько раз вызван дескриптор
 
     //Печать текстового дескриптора катринки
     public void printToast(View view) {
-        Desc_counter++;
-        if (Desc_counter > 8) {
+
+        view.setOnLongClickListener(v -> {
             clearBtn();
             lines_archive = 0;
+
+            return true;
+        });
+
+    }
+
+    public void showDescription(View v){
+        CharSequence description = v.getContentDescription();
+
+        if (description != null && description.length() > 0) {
+            Toast.makeText(
+                    v.getContext(),
+                    description,
+                    Toast.LENGTH_SHORT
+            ).show();
         }
-        Toast.makeText(this, view.getContentDescription(), Toast.LENGTH_SHORT).show();
 
     }
 

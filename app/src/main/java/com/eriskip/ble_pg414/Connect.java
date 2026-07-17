@@ -3,9 +3,6 @@ package com.eriskip.ble_pg414;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -17,22 +14,21 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.location.LocationManager;
-import android.media.AudioAttributes;
-import android.media.RingtoneManager;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
+
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresPermission;
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
-import androidx.core.content.ContextCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -49,8 +45,9 @@ import java.util.List;
 
 import com.eriskip.ble_pg414.library.PG414;
 
-import static android.app.Notification.VISIBILITY_PUBLIC;
 import static com.eriskip.ble_pg414.PermissionHelper.MY_PERMISSIONS_REQUEST_ALL;
+
+import org.jetbrains.annotations.NotNull;
 
 public class Connect extends AppCompatActivity {
 
@@ -125,7 +122,7 @@ public class Connect extends AppCompatActivity {
             }
 
             connectPressed = false;
-            ble_manager.disconnectFromUser = true;
+            ble_manager.disconnectFromUser = false;
             if (!hideMode) {
                 ble_manager.disconnect();
             }else{
@@ -153,6 +150,7 @@ public class Connect extends AppCompatActivity {
     }
 
 
+    Handler handler = new Handler(Looper.getMainLooper());
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     @SuppressLint({"ClickableViewAccessibility", "HandlerLeak"})
@@ -281,6 +279,15 @@ public class Connect extends AppCompatActivity {
 
         setListener();
 
+        getOnBackPressedDispatcher().addCallback(this,
+                new OnBackPressedCallback(true) {
+                    @Override
+                    public void handleOnBackPressed() {
+                        ble_manager.needToConnect = false;
+                        ble_manager.disconnect();
+                    }
+                });
+
 
     }
     //-----Конец OnCreate
@@ -295,8 +302,23 @@ public class Connect extends AppCompatActivity {
                     peripheralTextView.setText(message);
                     startScanningButton.setVisibility(View.VISIBLE);
                     if(!ble_manager.disconnectFromUser) {
+                        Log.d("Connect BLE_listener", "Показваю уведомление об отключении");
                         notHelper.showDisconnectNotification(this);
                     }
+                    break;
+                case DISCONNECTED:
+                    pgBar.setVisibility(View.INVISIBLE);
+                    stateText.setText(message);
+
+                    Runnable task = () -> stateText.setVisibility(View.INVISIBLE);
+                    handler.postDelayed(task, 2000);
+
+                    startScanningButton.setVisibility(View.VISIBLE);
+                    Log.d("Connect BLE_listener", "Пользователь отключился от устройства");
+                    break;
+                case DISCONNECTING:
+                    peripheralTextView.setText(R.string.Get_connect);
+                    stateText.setText(message);
                     break;
                 case READ_COMPLETE:
                     peripheralTextView.setText(message);
@@ -310,6 +332,8 @@ public class Connect extends AppCompatActivity {
                         startActivityForResult(intent, CHOOSE_THIEF);
                     }
                     break;
+                case READ_RSSI:
+                    break;
                 default:
                     stateText.setText(message);
 
@@ -321,6 +345,7 @@ public class Connect extends AppCompatActivity {
     @Override
     protected void onDestroy()
     {
+        Log.d("Connect", "onDestroy");
         super.onDestroy();
         BLE_manager.removeInstance();
         BLElist.clear();
@@ -334,6 +359,15 @@ public class Connect extends AppCompatActivity {
         setListener();
 
     }
+
+    @Override
+    public void onConfigurationChanged(@NotNull Configuration newConfig){
+
+        super.onConfigurationChanged(newConfig);
+
+        Log.d("onConfigurationChanged", " onConfigurationChanged");
+    }
+
 
     //Функция выводи сообщение о необходимости отключения энергосбережения
     private void Set_Battery()
@@ -367,6 +401,8 @@ public class Connect extends AppCompatActivity {
 
             ScanRecord scanRecord = result.getScanRecord();
 
+
+
             if (result.getDevice().getName()!=null){
                 if (result.getDevice().getName().contains("PG")) {
                     if (scanRecord != null){
@@ -376,9 +412,12 @@ public class Connect extends AppCompatActivity {
                         for (byte b : bytes) {
                             sb.append(String.format("%02X ", b));
                         }
+
                         Log.d("BLE_ADVERTISING", "Device: " + device.getAddress());
                         Log.d("BLE_ADVERTISING", "Raw packet: " + sb);
+                        Log.d("BLE", "Length = " + bytes.length);
                         Log.d("BLE_ADVERTISING", "Device Name: " + scanRecord.getDeviceName());
+                        Log.d("BLE", "Name length = " + scanRecord.getDeviceName().length());
                     }
 
 
@@ -530,6 +569,10 @@ public class Connect extends AppCompatActivity {
             Toast.makeText(this, "Для работы приложения необходимо включить Bluetooth", Toast.LENGTH_SHORT).show();
             return;
         }
+
+        ble_manager.needToConnect = true;
+
+        handler.removeCallbacksAndMessages(null);
 
         index = ind;
 

@@ -13,6 +13,7 @@
     <string name="params_reading">Чтение параметров</string>
     <string name="connect">Подключение...</string>
     <string name="disconnecting">Отключение...</string>
+    <string name="disconnected">Отключено</string>
     <string name="services_search">Поиск сервисов</string>
     <string name="characteristic_search">Чтение характеристик</string>
     <string name="dyn_reading">Чтение динамических параметров</string>
@@ -57,5 +58,6 @@
     <string name="channel_description">Уведомления</string>
     <string name="con_lost">Потеряно соединение с устройством</string>
     <string name="immobility">Детекция неподвижности</string>
+    <string name="send_to_server">Отправлять на сервер</string>
     <string name="check_gps">Проверьте настройки gps</string>
 </resources>

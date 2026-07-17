@@ -95,7 +95,7 @@ public class PermissionHelper {
             }
 
             if (showRationale) {
-                AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.AlertDialogCustom)
+                AlertDialog.Builder builder = new AlertDialog.Builder(activity, R.style.AlertDialogCustom)
                         .setTitle("Требуются разрешения")
                         .setMessage("Для работы Bluetooth и GPS необходимо предоставить разрешения:\n" +
                                 TextUtils.join("\n", permissionsNeeded))

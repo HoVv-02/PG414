@@ -249,6 +249,7 @@ public class PG414 {
                     "Extender error"
             };
 
+
         /**********ФУНКЦИИ**********/
 
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -468,6 +469,7 @@ public class PG414 {
                     }
                     break;
             }
+            displayAlarmsAndOverRange();
 
             return true;
         }
@@ -477,9 +479,7 @@ public class PG414 {
         {
             Set<String> errors = new LinkedHashSet<>();
 
-            int err = getCashedErrorBits();
-
-            displayAlarmsAndOverRange();
+            int err = getErrorBits();
 
             for (int i = 0; i < 32; i++)
             {
@@ -511,7 +511,7 @@ public class PG414 {
                 return status;
             }
 
-            String result = String.join("\n", prioritizedErrors);
+            String result = String.join(",\n", prioritizedErrors);
             status = result;
             return result;
         }

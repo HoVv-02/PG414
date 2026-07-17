@@ -36,7 +36,7 @@
         <activity
             android:name=".Connect"
             android:exported="true"
-            android:screenOrientation="portrait">
+            android:configChanges="orientation|screenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -46,7 +46,6 @@
         <activity
             android:name=".InfoPage"
             android:showOnLockScreen="true"
-            android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize"
             android:launchMode="singleTask"/>
     </application>

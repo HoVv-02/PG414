@@ -335,11 +335,10 @@
         android:layout_marginTop="6dp"
         android:layout_marginEnd="8dp"
         android:contentDescription="@string/Arch_Toast"
-        android:onClick="printToast"
+        android:onClick="showDescription"
         app:layout_constraintEnd_toStartOf="@+id/arch_cnt"
         app:layout_constraintTop_toTopOf="parent"
-        app:srcCompat="@drawable/avrr"
-        />
+        app:srcCompat="@drawable/avrr" />
 
     <TextView
         android:id="@+id/arch_cnt"
@@ -379,7 +378,7 @@
         android:layout_width="wrap_content"
         android:layout_height="41dp"
         android:layout_marginBottom="24dp"
-        android:text="Отправлять на сервер"
+        android:text="@string/send_to_server"
         android:textColor="@color/colorAccent"
         app:layout_constraintBottom_toTopOf="@+id/button3"
         app:layout_constraintEnd_toEndOf="parent"

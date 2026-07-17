@@ -25,7 +25,6 @@ public class NotificationHelper {
     //                  Выводим уведомление об отключении
     //-----------------------------------------------------------------
     public void showDisconnectNotification(Context context){
-        Log.d("showMessage", "Показываю уведомление об отлючении");
         Notification notification;
         Uri alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
         long[] pattern = {0, 100, 1000, 200, 2000};
